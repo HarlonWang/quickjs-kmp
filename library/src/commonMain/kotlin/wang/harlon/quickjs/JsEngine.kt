@@ -99,9 +99,10 @@ class JsEngine(private val config: JsEngineConfig = JsEngineConfig()) : AutoClos
     }
 
     /** Releases every [JsRef] as well: the engine's whole memory goes away with it. */
+    @Suppress("ControlFlowWithEmptyBody")
     override fun close() {
         if (!closed.compareAndSet(expectedValue = false, newValue = true)) return
-        // an interrupt that passed the closed check must finish before the handle is freed
+        // 有意自旋：interrupt() 可能刚通过 closed 检查、还没调到原生层，窗口只有几条指令，等它走完再释放句柄
         while (inFlightInterrupts.load() != 0) {
         }
         native.close()
