@@ -107,7 +107,9 @@ int32_t kmpjs_ref_to_json(kmpjs_engine *e, int64_t ref, kmpjs_value *out);
 /* ---- ES modules ----
    Modules are resolved from a name table only: import specifiers are looked up verbatim (no relative
    path handling) and an unknown name throws ReferenceError. Registration keeps the source; it is
-   compiled at the first import. Registering a name twice fails. */
+   compiled at the first import. A module evaluated with kmpjs_eval_module is cached by the engine
+   under its name as well and can be imported afterwards, so registered and evaluated names share
+   one namespace: claiming a name twice fails either way. Names in angle brackets are anonymous. */
 int32_t kmpjs_register_module(kmpjs_engine *e, const char *name, const char *code, int32_t code_len, kmpjs_value *out);
 /* Compiles and evaluates a module. The result is the module namespace as a KMPJS_TAG_REF once the
    module has run; a module still awaiting at top level comes back as a KMPJS_REF_PROMISE ref. */

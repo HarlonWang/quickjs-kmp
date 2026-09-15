@@ -68,7 +68,7 @@ JsEngine(JsEngineConfig(moduleScheme = "app")).use { engine ->
 }
 ```
 
-`evaluateModule` 以 `JsRef` 返回 namespace。注册的模块在第一次 import 时编译、只执行一次；同名重复注册会抛异常。支持顶层 `await`：调用返回时仍未完成的模块以带 `isPromise` 的 `JsRef` 返回。每次 `evaluateModule` 都会把编译后的模块留在引擎里直到引擎关闭。
+`evaluateModule` 以 `JsRef` 返回 namespace，之后该模块可以按名字被 import。注册的模块在第一次 import 时编译、只执行一次；注册名与求值名共用一个命名空间，任何名字占用两次都会抛异常（尖括号形式的名字如默认的 `<module>` 视为匿名）。支持顶层 `await`：调用返回时仍未完成的模块以带 `isPromise` 的 `JsRef` 返回。每次 `evaluateModule` 都会把编译后的模块留在引擎里直到引擎关闭。
 
 ### 持有 JS 对象：`JsRef`
 

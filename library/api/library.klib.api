@@ -123,7 +123,7 @@ final class wang.harlon.quickjs/JsEngine : kotlin/AutoCloseable { // wang.harlon
 }
 
 final class wang.harlon.quickjs/JsEngineConfig { // wang.harlon.quickjs/JsEngineConfig|null[0]
-    constructor <init>(kotlin/Long = ..., kotlin/Long = ..., kotlin/Long = ..., kotlin/String = ..., kotlin/Function1<kotlin/String, kotlin/Unit>? = ..., kotlin/Function1<wang.harlon.quickjs/JsException, kotlin/Unit>? = ...) // wang.harlon.quickjs/JsEngineConfig.<init>|<init>(kotlin.Long;kotlin.Long;kotlin.Long;kotlin.String;kotlin.Function1<kotlin.String,kotlin.Unit>?;kotlin.Function1<wang.harlon.quickjs.JsException,kotlin.Unit>?){}[0]
+    constructor <init>(kotlin/Long = ..., kotlin/Long = ..., kotlin/Long = ..., kotlin/Function1<kotlin/String, kotlin/Unit>? = ..., kotlin/Function1<wang.harlon.quickjs/JsException, kotlin/Unit>? = ..., kotlin/String = ...) // wang.harlon.quickjs/JsEngineConfig.<init>|<init>(kotlin.Long;kotlin.Long;kotlin.Long;kotlin.Function1<kotlin.String,kotlin.Unit>?;kotlin.Function1<wang.harlon.quickjs.JsException,kotlin.Unit>?;kotlin.String){}[0]
 
     final val gcThreshold // wang.harlon.quickjs/JsEngineConfig.gcThreshold|{}gcThreshold[0]
         final fun <get-gcThreshold>(): kotlin/Long // wang.harlon.quickjs/JsEngineConfig.gcThreshold.<get-gcThreshold>|<get-gcThreshold>(){}[0]

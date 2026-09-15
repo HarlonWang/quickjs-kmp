@@ -68,7 +68,7 @@ JsEngine(JsEngineConfig(moduleScheme = "app")).use { engine ->
 }
 ```
 
-`evaluateModule` returns the namespace as a `JsRef`. A registered module is compiled at its first import and runs once; registering a name twice throws. Top-level `await` is supported: a module still pending when the call returns comes back as a `JsRef` with `isPromise`. Each `evaluateModule` call leaves the compiled module in the engine for its lifetime.
+`evaluateModule` returns the namespace as a `JsRef`, and the module can be imported by its name afterwards. A registered module is compiled at its first import and runs once; registered and evaluated names share one namespace, so claiming a name twice throws (names in angle brackets, like the default, are anonymous). Top-level `await` is supported: a module still pending when the call returns comes back as a `JsRef` with `isPromise`. Each `evaluateModule` call leaves the compiled module in the engine for its lifetime.
 
 ### Holding JS objects: `JsRef`
 

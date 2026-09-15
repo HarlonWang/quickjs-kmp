@@ -6,19 +6,19 @@ package wang.harlon.quickjs
  * @property maxStackSize bytes of native stack the engine may use before throwing `RangeError`.
  * Must stay below the stack of the thread that runs the engine; 0 disables the check.
  * @property gcThreshold bytes allocated between garbage collection cycles; 0 keeps the engine default.
- * @property moduleScheme prefix of `import.meta.url`, which reads `<moduleScheme>:<module name>`.
  * @property logger receives each `console.log` / `print` line; exceptions it throws are swallowed.
  * @property onUnhandledRejection receives every promise rejected during an engine call and still
  * unhandled when that call returns; when null the rejection goes to [logger] as one line. Exceptions
  * it throws are swallowed.
+ * @property moduleScheme prefix of `import.meta.url`, which reads `<moduleScheme>:<module name>`.
  */
 class JsEngineConfig(
     val memoryLimit: Long = 0,
     val maxStackSize: Long = DEFAULT_MAX_STACK_SIZE,
     val gcThreshold: Long = 0,
-    val moduleScheme: String = "kmp",
     val logger: ((String) -> Unit)? = null,
     val onUnhandledRejection: ((JsException) -> Unit)? = null,
+    val moduleScheme: String = "kmp",
 ) {
     init {
         require(memoryLimit >= 0) { "memoryLimit must not be negative" }

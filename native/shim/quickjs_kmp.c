@@ -40,9 +40,12 @@ typedef struct {
     JSValue reason;
 } kmp_rejected;
 
+/* One row per module name the engine knows: registered (source kept until the first import) or
+   evaluated directly (source NULL). Both live in the context's module cache once loaded, so the
+   two kinds share one namespace and a name can only be claimed once. */
 typedef struct {
     char *name;
-    char *source; /* NUL terminated */
+    char *source; /* NUL terminated, NULL for a module evaluated directly */
     size_t len;
 } kmp_module;
 
@@ -370,7 +373,7 @@ static JSModuleDef *kmp_module_loader(JSContext *ctx, const char *name, void *op
     JSValue obj;
     JSModuleDef *m;
 
-    if (!mod) {
+    if (!mod || !mod->source) {
         JS_ThrowReferenceError(ctx, "module '%s' is not registered", name);
         return NULL;
     }
@@ -1103,16 +1106,20 @@ void kmpjs_eval(kmpjs_engine *e, const char *code, int32_t code_len, const char 
     finish(e, outermost, r, flags, 1, NULL, out);
 }
 
-int32_t kmpjs_register_module(kmpjs_engine *e, const char *name, const char *code, int32_t code_len, kmpjs_value *out)
+static int32_t module_name_taken(kmpjs_engine *e, const char *name, kmpjs_value *out)
+{
+    kmp_module *mod = find_module(e, name);
+    char msg[192];
+    if (!mod)
+        return 0;
+    snprintf(msg, sizeof msg, mod->source ? "module '%.128s' is already registered" : "module '%.128s' was already evaluated", name);
+    return fail_message(e, out, msg);
+}
+
+/* code NULL records a directly evaluated module under `name`. */
+static int32_t claim_module_name(kmpjs_engine *e, const char *name, const char *code, int32_t code_len, kmpjs_value *out)
 {
     kmp_module *mod;
-    if (!name[0])
-        return fail_message(e, out, "module name must not be empty");
-    if (find_module(e, name)) {
-        char msg[192];
-        snprintf(msg, sizeof msg, "module '%.128s' is already registered", name);
-        return fail_message(e, out, msg);
-    }
     if (e->module_count == e->module_cap) {
         int32_t cap = e->module_cap ? e->module_cap * 2 : 8;
         kmp_module *list = realloc(e->modules, (size_t)cap * sizeof(*list));
@@ -1123,25 +1130,40 @@ int32_t kmpjs_register_module(kmpjs_engine *e, const char *name, const char *cod
     }
     mod = &e->modules[e->module_count];
     mod->name = strdup(name);
-    mod->source = terminated_copy(code, code_len);
-    if (!mod->name || !mod->source) {
+    mod->source = code ? terminated_copy(code, code_len) : NULL;
+    if (!mod->name || (code && !mod->source)) {
         free(mod->name);
         free(mod->source);
         return fail_message(e, out, "out of memory");
     }
     mod->len = (size_t)code_len;
     e->module_count++;
+    return 0;
+}
+
+int32_t kmpjs_register_module(kmpjs_engine *e, const char *name, const char *code, int32_t code_len, kmpjs_value *out)
+{
+    if (!name[0])
+        return fail_message(e, out, "module name must not be empty");
+    if (module_name_taken(e, name, out) || claim_module_name(e, name, code ? code : "", code_len, out))
+        return -1;
     memset(out, 0, sizeof(*out));
     return 0;
 }
 
+/* Names in angle brackets ("<module>") are anonymous: not importable, never recorded. */
 int32_t kmpjs_eval_module(kmpjs_engine *e, const char *code, int32_t code_len, const char *name, int32_t flags, kmpjs_value *out)
 {
-    int outermost = run_begin(e);
-    char *buf = terminated_copy(code, code_len);
+    int anonymous = name[0] == '<';
+    int outermost;
+    char *buf;
     JSValue obj, promise;
     JSModuleDef *m;
 
+    if (!anonymous && module_name_taken(e, name, out))
+        return -1;
+    outermost = run_begin(e);
+    buf = terminated_copy(code, code_len);
     if (!buf) {
         fail_message(e, out, "out of memory");
         run_end(e, outermost);
@@ -1151,6 +1173,12 @@ int32_t kmpjs_eval_module(kmpjs_engine *e, const char *code, int32_t code_len, c
     free(buf);
     if (JS_IsException(obj))
         return finish(e, outermost, obj, flags, 0, NULL, out);
+    /* from here on the context caches the module under this name, so the name is spent */
+    if (!anonymous && claim_module_name(e, name, NULL, 0, out)) {
+        JS_FreeValue(e->ctx, obj);
+        run_end(e, outermost);
+        return -1;
+    }
     m = JS_VALUE_GET_PTR(obj);
     promise = JS_EvalFunction(e->ctx, obj);
     return finish(e, outermost, promise, flags | KMPJS_FLAG_REF_OBJECTS, 1, m, out);

@@ -243,6 +243,20 @@ static void test_modules(void)
     ns = v.ref;
     CHECK(kmpjs_ref_get(g, ns, "r", 0, &v) == 0 && str_is(&v, "ba3"));
     kmpjs_ref_release(g, ns);
+    /* evaluated modules are importable under their name; registered and evaluated names never collide */
+    CHECK(kmpjs_eval_module(g, S("export const page = 'p';"), "page", 0, &v) == 0);
+    kmpjs_ref_release(g, v.ref);
+    CHECK(kmpjs_eval_module(g, S("import { page } from 'page'; export default page + '!';"), "<module>", 0, &v) == 0);
+    ns = v.ref;
+    CHECK(kmpjs_ref_get(g, ns, "default", 0, &v) == 0 && str_is(&v, "p!"));
+    kmpjs_ref_release(g, ns);
+    CHECK(kmpjs_eval_module(g, S("export const again = 1;"), "<module>", 0, &v) == 0);
+    kmpjs_ref_release(g, v.ref);
+    CHECK(kmpjs_register_module(g, "page", S("export const page = 'shadow';"), &out) != 0 && str_has(&out, "already evaluated"));
+    CHECK(kmpjs_eval_module(g, S("export const page = 'twice';"), "page", 0, &v) != 0 && str_has(&v, "already evaluated"));
+    CHECK(kmpjs_eval_module(g, S("export const c = 1;"), "counter", 0, &v) != 0 && str_has(&v, "already registered"));
+    CHECK(kmpjs_eval_module(g, S("export const = ;"), "never", 0, &v) != 0);
+    CHECK(kmpjs_register_module(g, "never", S("export const ok = 1;"), &out) == 0); /* a failed compile spends no name */
     kmpjs_get_stats(g, &st); CHECK(st.live_refs == 0);
 }
 

@@ -60,6 +60,22 @@ class JsModuleTest {
     }
 
     @Test
+    fun evaluatedModulesAreImportableAndNamesNeverCollide() = JsEngine().use { engine ->
+        engine.evaluateModule("export const page = 'p';", name = "page").close()
+        engine.evaluateModule("import { page } from 'page'; export default page + '!';").use { assertEquals(JsValue.Str("p!"), it.get("default")) }
+        engine.evaluateModule("export const again = 1;").close()
+        val shadow = assertFailsWith<JsException> { engine.registerModule("page", "export const page = 'shadow';") }
+        assertTrue(shadow.message.orEmpty().contains("already evaluated"), "message was: ${shadow.message}")
+        assertFailsWith<JsException> { engine.evaluateModule("export const page = 'twice';", name = "page") }
+        engine.registerModule("lib", "export const lib = 1;")
+        val registered = assertFailsWith<JsException> { engine.evaluateModule("export const lib = 2;", name = "lib") }
+        assertTrue(registered.message.orEmpty().contains("already registered"), "message was: ${registered.message}")
+        assertFailsWith<JsException> { engine.evaluateModule("export const = ;", name = "never") }
+        engine.registerModule("never", "export const ok = 1;")
+        assertEquals(0, engine.stats().liveRefs)
+    }
+
+    @Test
     fun topLevelAwaitSettlesWithinTheCallOrComesBackPending() = JsEngine().use { engine ->
         engine.evaluateModule("const x = await Promise.resolve(41); export const y = x + 1;", name = "settled").use {
             assertEquals(JsValue.Num(42), it.get("y"))

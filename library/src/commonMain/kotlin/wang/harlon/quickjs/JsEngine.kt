@@ -85,7 +85,7 @@ class JsEngine(private val config: JsEngineConfig = JsEngineConfig()) : AutoClos
     /**
      * Makes [source] importable as the ES module [name], exactly as scripts spell the specifier:
      * there is no relative-path resolution. The module is compiled at its first import.
-     * @throws JsException when [name] is already registered
+     * @throws JsException when [name] is already registered or was evaluated by [evaluateModule]
      */
     fun registerModule(name: String, source: String) {
         checkOpen()
@@ -95,9 +95,11 @@ class JsEngine(private val config: JsEngineConfig = JsEngineConfig()) : AutoClos
     /**
      * Compiles and runs [source] as an ES module and returns its namespace object, from which
      * `default` and named exports can be read. A module still awaiting at top level when this
-     * returns comes back as a [JsRef] with [JsRef.isPromise] instead. Every call leaves the compiled
-     * module in the engine for its whole lifetime.
-     * @throws JsException when the module or one it imports fails to compile, resolve or run
+     * returns comes back as a [JsRef] with [JsRef.isPromise] instead. The module stays in the engine
+     * for its whole lifetime and other modules can import it by [name]; names in angle brackets such
+     * as the default are anonymous and not importable.
+     * @throws JsException when the module or one it imports fails to compile, resolve or run, or
+     * when [name] is already taken by a registered or evaluated module
      */
     fun evaluateModule(source: String, name: String = "<module>"): JsRef {
         checkOpen()
