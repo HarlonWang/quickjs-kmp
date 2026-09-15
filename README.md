@@ -39,6 +39,21 @@ JsEngine(JsEngineConfig(memoryLimit = 8L * 1024 * 1024, logger = ::println)).use
 - `JsEngineConfig.maxStackSize` (default 256 KB) must stay below the stack of the thread that runs the engine.
 - The engine is single-threaded; use `JsRuntime` (below) or serialize access yourself.
 
+### Promises and `async`
+
+Every outermost engine call drains the microtask queue before it returns, so `then` callbacks and `await` continuations run inside the same call. A Promise result is unwrapped: fulfilled gives its value, rejected throws `JsException`, still pending comes back as a `JsRef` whose `isPromise` is true; the Promise itself may settle during a later call, the flag does not change.
+
+```kotlin
+JsEngine(JsEngineConfig(onUnhandledRejection = { e -> println("lost: ${e.message}") })).use { engine ->
+    engine.evaluate("async function total(a, b) { await null; return a + b; }")
+    engine.evaluate("total(1, 2)")                       // JsValue.Num(3.0)
+    engine.evaluate("Promise.reject(new Error('x'))")    // throws JsException("Error: x")
+    engine.evaluate("Promise.reject(new Error('y')); 0") // returns 0, handler receives "Error: y"
+}
+```
+
+Rejections nobody handled by the time the call returns go to `onUnhandledRejection`, or to `logger` as one line when no handler is set. Interrupting a call also discards the microtasks it left behind.
+
 ### Holding JS objects: `JsRef`
 
 Ask for `ObjectTransport.REF` and objects come back as live handles instead of JSON. A `JsRef` reads and writes properties, indexes arrays, calls functions with a `this` and arguments, and must be closed: the object stays alive in the engine until then.

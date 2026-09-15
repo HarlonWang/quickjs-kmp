@@ -3,6 +3,7 @@ package wang.harlon.quickjs
 internal interface HostCallbacks {
     fun onHostCall(id: Int, args: List<RawValue>): RawValue
     fun onLog(message: String)
+    fun onUnhandledRejection(reason: RawValue)
 }
 
 /** Mirror of `kmpjs_value` (native/shim/quickjs_kmp.h); the only shape that crosses the native boundary. */
@@ -28,6 +29,7 @@ internal object NativeTag {
     const val FLAG_REF_OBJECTS = 1
     const val REF_FUNCTION = 1
     const val REF_ARRAY = 2
+    const val REF_PROMISE = 4
 }
 
 internal expect class NativeEngine(config: JsEngineConfig, host: HostCallbacks) {

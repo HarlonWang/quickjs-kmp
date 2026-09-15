@@ -11,6 +11,7 @@ static JavaVM *g_vm;
 static jclass g_bridge;
 static jmethodID g_on_host_call;
 static jmethodID g_on_log;
+static jmethodID g_on_rejection;
 static jclass g_value;
 static jmethodID g_value_ctor;
 static jfieldID g_f_tag, g_f_ref, g_f_num, g_f_str, g_f_stack;
@@ -35,6 +36,8 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved)
     g_on_host_call = (*env)->GetStaticMethodID(env, g_bridge, "onHostCall",
         "(Ljava/lang/Object;I[L" VALUE_CLASS ";)L" VALUE_CLASS ";");
     g_on_log = (*env)->GetStaticMethodID(env, g_bridge, "onLog", "(Ljava/lang/Object;[B)V");
+    g_on_rejection = (*env)->GetStaticMethodID(env, g_bridge, "onUnhandledRejection",
+        "(Ljava/lang/Object;L" VALUE_CLASS ";)V");
 
     cls = (*env)->FindClass(env, VALUE_CLASS);
     if (!cls)
@@ -47,7 +50,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved)
     g_f_str = (*env)->GetFieldID(env, g_value, "str", "[B");
     g_f_stack = (*env)->GetFieldID(env, g_value, "stack", "[B");
 
-    if (!g_on_host_call || !g_on_log || !g_value_ctor || !g_f_tag || !g_f_ref || !g_f_num || !g_f_str || !g_f_stack)
+    if (!g_on_host_call || !g_on_log || !g_on_rejection || !g_value_ctor || !g_f_tag || !g_f_ref || !g_f_num || !g_f_str || !g_f_stack)
         return JNI_ERR;
     return JNI_VERSION_1_6;
 }
@@ -176,6 +179,18 @@ static void jni_log(void *user, const char *msg, int32_t len)
     (*env)->PopLocalFrame(env, NULL);
 }
 
+static void jni_rejection(void *user, const kmpjs_value *reason)
+{
+    JNIEnv *env = current_env();
+    jni_user *u = user;
+    if (!env || (*env)->PushLocalFrame(env, 8) != 0)
+        return;
+    (*env)->CallStaticVoidMethod(env, g_bridge, g_on_rejection, u->target, new_value(env, reason));
+    if ((*env)->ExceptionCheck(env))
+        (*env)->ExceptionClear(env);
+    (*env)->PopLocalFrame(env, NULL);
+}
+
 JNIEXPORT jint JNICALL
 Java_wang_harlon_quickjs_NativeBridge_nativeAbiVersion(JNIEnv *env, jclass cls)
 {
@@ -192,7 +207,7 @@ Java_wang_harlon_quickjs_NativeBridge_nativeCreate(JNIEnv *env, jclass cls, jlon
     if (!u)
         return 0;
     u->target = (*env)->NewGlobalRef(env, target);
-    e = kmpjs_create(&cfg, u, jni_host, jni_log);
+    e = kmpjs_create(&cfg, u, jni_host, jni_log, jni_rejection);
     if (!e) {
         (*env)->DeleteGlobalRef(env, u->target);
         free(u);

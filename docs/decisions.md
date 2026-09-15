@@ -40,15 +40,15 @@ ES2025 下 JSON 过桥的损失面比 ES5 大得多，这是默认 `ObjectTransp
 
 ## 微任务：最外层宿主调用返回前排空
 
-`evaluate` / `callFunction` / `evaluateModule` 执行完主体后循环 `JS_ExecutePendingJob` 直到 `JS_IsJobPending` 为假，再返回 Kotlin。理由：QuickJS 有微任务队列但没有事件循环，若不在此处排空，Promise 回调将永远不跑；排空发生在同一次宿主调用内，TinyUI「一次 K 入口 = 一个事务」的边界因此不变。排空只发生在**最外层**：shim 维护调用深度计数，宿主函数里再次进入引擎（嵌套 `callFunction`）的内层返回时不排空，否则会把外层脚本执行中途的微任务提前跑掉，违反「微任务在当前宏任务结束后执行」的语义。排空受 interrupt 与超时约束（一个无限自我调度的 Promise 链会被看门狗打断）。
+`evaluate` / `callFunction` / `evaluateModule` 以及 ref 的属性读取执行完主体后循环 `JS_ExecutePendingJob` 直到队列为空，再返回 Kotlin。理由：QuickJS 有微任务队列但没有事件循环，若不在此处排空，Promise 回调将永远不跑；排空发生在同一次宿主调用内，TinyUI「一次 K 入口 = 一个事务」的边界因此不变。排空只发生在**最外层**：shim 已有的 idle / running 状态机就是深度判断，宿主函数里再次进入引擎（嵌套 `callFunction`）的内层返回时不排空，否则会把外层脚本执行中途的微任务提前跑掉，违反「微任务在当前宏任务结束后执行」的语义。排空受 interrupt 与超时约束（一个无限自我调度的 Promise 链会被看门狗打断）。
 
-`JS_ExecutePendingJob` 返回 -1 时停止排空，把异常作为本次调用的 `JsException` 抛出：实践中只有中断与 OOM 这类不可捕获异常会走到这里，反应回调里的普通异常由引擎转成派生 Promise 的 rejection，归下一段。
+`JS_ExecutePendingJob` 返回 -1 时停止排空，把异常作为本次调用的 `JsException` 抛出（调用主体自己的异常优先，先于排空捕获）：实践中只有中断与 OOM 这类不可捕获异常会走到这里，反应回调里的普通异常由引擎转成派生 Promise 的 rejection，归下一段。排空被打断后队列里剩下的 job **丢弃**，而不是留到下一次调用：无限链留着会让之后每一次调用都挂住，引擎等于报废。QuickJS 没有清空队列的 API，丢弃的做法是把栈限额临时设为 1 字节再把队列跑空，每个 job 在函数入口就以栈溢出失败、来不及再入队，跑完恢复限额，期间产生的 rejection 一并忽略。
 
 排空后的未处理 rejection 经 `JS_SetHostPromiseRejectionTracker` 收集，回调 `JsEngineConfig.onUnhandledRejection`；未设置时经 `logger` 输出一行。不默认抛 `JsException`：本次调用的返回值已经算出来了，fire-and-forget 的 `async` 失败不该吞掉它。TinyUI 把 handler 接进错误 sink。
 
 ## Promise 结果：调用返回 Promise 时可取最终值
 
-`callFunction` / `evaluateModule` 的结果若为 Promise，排空微任务后用 `JS_PromiseState` / `JS_PromiseResult` 取值：fulfilled 返回值，rejected 抛 `JsException`，pending（等待宿主异步能力）返回 `JsValue.Promise` 的 ref 由调用方持有。业务 `async` 函数被宿主调用时 Kotlin 因此能拿到最终值。
+`evaluate` / `callFunction` / `evaluateModule` 的结果若为 Promise，排空微任务后用 `JS_PromiseState` / `JS_PromiseResult` 取值：fulfilled 返回值，rejected 抛 `JsException`（并从未处理 rejection 清单里移除，不重复上报），pending（等待宿主异步能力）返回带 `isPromise` 的 `JsRef`，**不论调用点选的是 JSON 还是 REF**：JSON 化一个 pending Promise 只能得到 `{}`，调用方要的是之后还能拿到结果的把手。业务 `async` 函数被宿主调用时 Kotlin 因此能拿到最终值。属性读取（`JsRef.get`）不解包，读到什么给什么。
 
 ## 模块：原生 ESM，引擎侧只解析预注册的名字
 

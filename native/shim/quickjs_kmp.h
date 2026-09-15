@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-#define KMPJS_ABI_VERSION 1
+#define KMPJS_ABI_VERSION 2
 
 typedef struct kmpjs_engine kmpjs_engine;
 
@@ -28,6 +28,7 @@ enum {
 enum {
     KMPJS_REF_FUNCTION = 1,
     KMPJS_REF_ARRAY = 2,
+    KMPJS_REF_PROMISE = 4,
 };
 
 /* kmpjs_define_function rejects fn_id above this (the engine keeps the id in 14 bits) */
@@ -63,15 +64,23 @@ typedef struct {
 typedef int (*kmpjs_host_fn)(void *user, int32_t fn_id, const kmpjs_value *args,
                              int32_t argc, kmpjs_value *result);
 typedef void (*kmpjs_log_fn)(void *user, const char *msg, int32_t len);
+/* A promise rejected during the call that just finished and still unhandled when it returns.
+   `reason` is a KMPJS_TAG_EXCEPTION value valid only during the callback. */
+typedef void (*kmpjs_rejection_fn)(void *user, const kmpjs_value *reason);
 
 int32_t kmpjs_abi_version(void);
 
 /* Returns NULL when the runtime cannot be created. */
-kmpjs_engine *kmpjs_create(const kmpjs_config *config, void *user, kmpjs_host_fn host, kmpjs_log_fn log);
+kmpjs_engine *kmpjs_create(const kmpjs_config *config, void *user, kmpjs_host_fn host, kmpjs_log_fn log,
+                           kmpjs_rejection_fn rejection);
 void kmpjs_destroy(kmpjs_engine *e);
 void *kmpjs_get_user(kmpjs_engine *e);
 
-/* String payloads in *out stay valid until the next kmpjs_* call on the same engine. */
+/* String payloads in *out stay valid until the next kmpjs_* call on the same engine.
+   The outermost call (kmpjs_eval / kmpjs_ref_get* / kmpjs_ref_call, not nested in a host function)
+   drains the microtask queue before returning; unhandled rejections are then reported through
+   kmpjs_rejection_fn. A Promise result is unwrapped: fulfilled yields its value, rejected raises
+   its reason, pending comes back as a KMPJS_REF_PROMISE ref whatever the flags say. */
 void kmpjs_eval(kmpjs_engine *e, const char *code, int32_t code_len,
                 const char *filename, int32_t flags, kmpjs_value *out);
 

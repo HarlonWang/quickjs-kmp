@@ -35,12 +35,22 @@ class JsEngine(private val config: JsEngineConfig = JsEngineConfig()) : AutoClos
             } catch (_: Throwable) {
             }
         }
+
+        override fun onUnhandledRejection(reason: RawValue) {
+            val message = reason.str ?: "unknown exception"
+            try {
+                val handler = config.onUnhandledRejection
+                if (handler != null) handler(JsException(message, reason.stack)) else config.logger?.invoke("Unhandled promise rejection: $message")
+            } catch (_: Throwable) {
+            }
+        }
     }
 
     internal val native = NativeEngine(config, callbacks)
 
     /**
-     * Compiles and runs [script], returning the value of its last expression statement.
+     * Compiles and runs [script], returning the value of its last expression statement. Microtasks run
+     * before this returns; a Promise result is unwrapped (fulfilled: value, rejected: [JsException], pending: [JsRef]).
      * @throws JsException when the script throws, fails to parse, or exhausts memory.
      */
     fun evaluate(

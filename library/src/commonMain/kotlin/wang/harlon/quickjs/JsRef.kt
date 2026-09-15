@@ -11,10 +11,13 @@ package wang.harlon.quickjs
 class JsRef internal constructor(
     internal val engine: JsEngine,
     internal val id: Long,
-    kind: Int,
+    private val kind: Int,
 ) : JsValue, AutoCloseable {
     val isFunction: Boolean = kind and NativeTag.REF_FUNCTION != 0
     val isArray: Boolean = kind and NativeTag.REF_ARRAY != 0
+
+    /** A Promise that was still pending when the call returned; it settles during a later engine call. */
+    val isPromise: Boolean = kind and NativeTag.REF_PROMISE != 0
 
     private var closed = false
 
@@ -38,7 +41,7 @@ class JsRef internal constructor(
         op { native.refSet(id, name, encode(value)) }
     }
 
-    /** Calls this function with `this` undefined; objects come back as JSON. */
+    /** Calls this function with `this` undefined; objects come back as JSON, a Promise result is unwrapped as in [JsEngine.evaluate]. */
     fun call(vararg args: JsValue): JsValue = invoke(null, args.toList())
 
     fun invoke(
@@ -56,7 +59,7 @@ class JsRef internal constructor(
     /** Keeps a transient host-function argument alive beyond the call; the returned ref must be closed. */
     fun retain(): JsRef {
         op { native.refRetain(id); null }
-        return JsRef(engine, id, (if (isFunction) NativeTag.REF_FUNCTION else 0) or (if (isArray) NativeTag.REF_ARRAY else 0))
+        return JsRef(engine, id, kind)
     }
 
     override fun close() {
@@ -70,7 +73,7 @@ class JsRef internal constructor(
         return engine.refOp(block)
     }
 
-    override fun toString(): String = "JsRef(id=$id, function=$isFunction, array=$isArray)"
+    override fun toString(): String = "JsRef(id=$id, function=$isFunction, array=$isArray, promise=$isPromise)"
 }
 
 internal val ObjectTransport.flags: Int

@@ -9,6 +9,8 @@ static int failures;
 static kmpjs_engine *g;
 static int64_t retained_ref;
 static char last_log[512];
+static int rejections;
+static char last_rejection[512];
 
 #define CHECK(cond) do { if (!(cond)) { failures++; printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); } } while (0)
 #define S(x) x, (int32_t)strlen(x)
@@ -106,6 +108,62 @@ static void logger(void *user, const char *msg, int32_t len)
     int32_t n = len < (int32_t)sizeof(last_log) - 1 ? len : (int32_t)sizeof(last_log) - 1;
     memcpy(last_log, msg, (size_t)n);
     last_log[n] = '\0';
+}
+
+static void rejection(void *user, const kmpjs_value *reason)
+{
+    int32_t n = reason->str_len < (int32_t)sizeof(last_rejection) - 1 ? reason->str_len : (int32_t)sizeof(last_rejection) - 1;
+    CHECK(reason->tag == KMPJS_TAG_EXCEPTION);
+    memcpy(last_rejection, reason->str, (size_t)n);
+    last_rejection[n] = '\0';
+    rejections++;
+}
+
+static void test_promises(void)
+{
+    kmpjs_value v, out;
+    kmpjs_stats st;
+
+    /* microtasks run after the script body, before the call returns */
+    v = eval("var order = []; Promise.resolve().then(() => order.push('micro')); order.push('sync'); order.join()", 0);
+    CHECK(str_is(&v, "sync"));
+    v = eval("order.join()", 0); CHECK(str_is(&v, "sync,micro"));
+    /* a nested call from a host function does not drain early */
+    v = eval("order = []; Promise.resolve().then(() => order.push('micro')); nested(); order.push('sync'); order.join()", 0);
+    CHECK(str_is(&v, "sync"));
+    v = eval("order.join()", 0); CHECK(str_is(&v, "sync,micro"));
+    /* a job that re-enters the engine through a host function must not clobber the call's own error */
+    v = eval("Promise.resolve().then(() => nested()); null.x", 0);
+    CHECK(v.tag == KMPJS_TAG_EXCEPTION && str_is(&v, "TypeError: cannot read property 'x' of null"));
+    v = eval("Promise.resolve().then(() => nested()); 'kept'", 0); CHECK(str_is(&v, "kept"));
+    /* work queued by toJSON while the result is being serialized still runs inside this call */
+    v = eval("order = []; ({toJSON() { Promise.resolve().then(() => order.push('fromToJSON')); return {a: 1}; }})", 0);
+    CHECK(v.tag == KMPJS_TAG_OBJECT && str_is(&v, "{\"a\":1}"));
+    v = eval("order.join()", 0); CHECK(str_is(&v, "fromToJSON"));
+    v = eval("({toJSON() { Promise.reject(new Error('from toJSON')); return 1; }})", 0); CHECK(v.tag == KMPJS_TAG_OBJECT && str_is(&v, "1"));
+    CHECK(rejections == 1 && strcmp(last_rejection, "Error: from toJSON") == 0);
+    rejections = 0;
+    /* settled promises are unwrapped, pending ones come back as refs */
+    v = eval("(async () => { await null; return 6 * 7; })()", 0); CHECK(v.tag == KMPJS_TAG_NUMBER && v.num == 42);
+    v = eval("(async () => { throw new Error('nope'); })()", 0); CHECK(v.tag == KMPJS_TAG_EXCEPTION && str_is(&v, "Error: nope"));
+    CHECK(rejections == 0);
+    v = eval("new Promise(() => {})", 0); CHECK(v.tag == KMPJS_TAG_REF && ((int)v.num & KMPJS_REF_PROMISE));
+    kmpjs_ref_release(g, v.ref);
+    /* unhandled rejections are reported once, handled ones are not */
+    v = eval("Promise.reject(new Error('lost')); 1", 0); CHECK(v.num == 1);
+    CHECK(rejections == 1 && strcmp(last_rejection, "Error: lost") == 0);
+    v = eval("var p = Promise.reject(new Error('caught')); p.catch(() => {}); 2", 0); CHECK(v.num == 2);
+    CHECK(rejections == 1);
+    /* an interrupt from inside the chain stops the drain */
+    v = eval("var n = 0; function loop() { if (++n === 100) stop(); Promise.resolve().then(loop); } loop(); 3", 0);
+    CHECK(v.tag == KMPJS_TAG_EXCEPTION && str_has(&v, "interrupted"));
+    /* the leftover chain was discarded: the engine is idle again and later promises still work */
+    v = eval("n", 0); CHECK(v.tag == KMPJS_TAG_NUMBER && v.num >= 100);
+    v = eval("(async () => 5)()", 0); CHECK(v.tag == KMPJS_TAG_NUMBER && v.num == 5);
+    v = eval("n", 0); CHECK(v.tag == KMPJS_TAG_NUMBER);
+    CHECK(rejections == 1);
+    kmpjs_get_stats(g, &st); CHECK(st.live_refs == 0);
+    (void)out;
 }
 
 static void test_values(void)
@@ -239,13 +297,14 @@ int main(void)
     kmpjs_value v;
     kmpjs_config cfg = { 4 * 1024 * 1024, 256 * 1024, 0 };
     kmpjs_config tiny = { 100, 0, 0 };
-    g = kmpjs_create(&cfg, NULL, host, logger);
+    g = kmpjs_create(&cfg, NULL, host, logger, rejection);
     CHECK(g != NULL);
-    CHECK(kmpjs_create(&tiny, NULL, host, logger) == NULL);
+    CHECK(kmpjs_create(&tiny, NULL, host, logger, rejection) == NULL);
     test_values();
     test_exceptions();
     test_host_functions();
     test_refs();
+    test_promises();
     /* destroy with refs still open must be clean */
     v = eval("({leak: 1})", KMPJS_FLAG_REF_OBJECTS); CHECK(v.tag == KMPJS_TAG_REF);
     kmpjs_destroy(g);

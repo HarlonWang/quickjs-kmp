@@ -39,6 +39,21 @@ JsEngine(JsEngineConfig(memoryLimit = 8L * 1024 * 1024, logger = ::println)).use
 - `JsEngineConfig.maxStackSize`（默认 256 KB）必须小于运行引擎的线程栈。
 - 引擎是单线程的；用下面的 `JsRuntime`，或自行串行化访问。
 
+### Promise 与 `async`
+
+每次最外层引擎调用返回前都会排空微任务队列，所以 `then` 回调和 `await` 之后的续行在同一次调用里跑完。Promise 结果会被解包：fulfilled 给出它的值，rejected 抛 `JsException`，仍是 pending 的以 `isPromise` 为 true 的 `JsRef` 返回；Promise 本身可能在之后的调用中 settle，标记不会随之改变。
+
+```kotlin
+JsEngine(JsEngineConfig(onUnhandledRejection = { e -> println("lost: ${e.message}") })).use { engine ->
+    engine.evaluate("async function total(a, b) { await null; return a + b; }")
+    engine.evaluate("total(1, 2)")                       // JsValue.Num(3.0)
+    engine.evaluate("Promise.reject(new Error('x'))")    // 抛 JsException("Error: x")
+    engine.evaluate("Promise.reject(new Error('y')); 0") // 返回 0，handler 收到 "Error: y"
+}
+```
+
+调用返回时仍没人处理的 rejection 交给 `onUnhandledRejection`，没设 handler 时经 `logger` 输出一行。中断一次调用也会丢弃它留下的微任务。
+
 ### 持有 JS 对象：`JsRef`
 
 指定 `ObjectTransport.REF`，对象就以句柄而非 JSON 返回。`JsRef` 可以读写属性、按下标访问数组、带 `this` 与参数调用函数，用完必须 close：在此之前对象一直活在引擎里。
