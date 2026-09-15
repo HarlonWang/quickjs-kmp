@@ -32,7 +32,7 @@ JsEngine(JsEngineConfig(memoryLimit = 8L * 1024 * 1024, logger = ::println)).use
 }
 ```
 
-- Primitives cross the boundary as `JsValue.Num` / `Str` / `Bool` / `Null` / `Undefined`; objects and arrays as `JsValue.Json` by default. JSON drops what `JSON.stringify` drops (functions, `undefined` properties, `Map` / `Set` contents); ask for `ObjectTransport.REF` when that matters.
+- Primitives cross the boundary as `JsValue.Num` / `Str` / `Bool` / `Null` / `Undefined`, `BigInt` as decimal text in `JsValue.BigInt`, `ArrayBuffer` and typed arrays as a copy of their bytes in `JsValue.Bytes` (a `Bytes` handed to JS becomes an `ArrayBuffer`); other objects and arrays as `JsValue.Json` by default. JSON drops what `JSON.stringify` drops (functions, `undefined` properties, `Map` / `Set` contents); ask for `ObjectTransport.REF` when that matters.
 - A script that throws, fails to parse, or hits `memoryLimit` raises `JsException` with the engine's message and `stack`.
 - Throwing from a host function surfaces in JS as an `Error` with the Kotlin message.
 - `engine.interrupt()` may be called from any thread and stops the running script with an uncatchable `InternalError: interrupted`.

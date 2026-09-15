@@ -7,7 +7,7 @@ internal object NativeBridge {
         check(abi == ABI_VERSION) { "libquickjs_kmp ABI $abi does not match Kotlin side $ABI_VERSION" }
     }
 
-    const val ABI_VERSION = 2
+    const val ABI_VERSION = 3
 
     @JvmStatic external fun nativeAbiVersion(): Int
     @JvmStatic external fun nativeCreate(memoryLimit: Long, maxStackSize: Long, gcThreshold: Long, target: Any): Long
@@ -47,7 +47,8 @@ internal object NativeBridge {
 }
 
 internal fun NativeValue.toRaw(): RawValue =
-    RawValue(tag, ref, num, str?.let(Wtf8::decode), stack?.let(Wtf8::decode))
+    if (tag == NativeTag.BINARY) RawValue(tag, bytes = str ?: ByteArray(0))
+    else RawValue(tag, ref, num, str?.let(Wtf8::decode), stack?.let(Wtf8::decode))
 
 internal fun RawValue.toNative(): NativeValue =
-    NativeValue(tag, ref, num, str?.let(Wtf8::encode), stack?.let(Wtf8::encode))
+    NativeValue(tag, ref, num, bytes ?: str?.let(Wtf8::encode), stack?.let(Wtf8::encode))

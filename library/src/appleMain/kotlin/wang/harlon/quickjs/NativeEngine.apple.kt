@@ -200,13 +200,18 @@ private fun MemScope.cString(text: String): CPointer<kotlinx.cinterop.ByteVar> {
 }
 
 @OptIn(ExperimentalForeignApi::class)
-private fun kmpjs_value.toRaw(): RawValue = RawValue(
-    tag,
-    ref,
-    num,
-    str?.readBytes(str_len)?.let(Wtf8::decode),
-    stack?.readBytes(stack_len)?.let(Wtf8::decode),
-)
+private fun kmpjs_value.toRaw(): RawValue =
+    if (tag == NativeTag.BINARY) {
+        RawValue(tag, bytes = str?.readBytes(str_len) ?: ByteArray(0))
+    } else {
+        RawValue(
+            tag,
+            ref,
+            num,
+            str?.readBytes(str_len)?.let(Wtf8::decode),
+            stack?.readBytes(stack_len)?.let(Wtf8::decode),
+        )
+    }
 
 /** String payloads come from kmpjs_alloc; the engine frees host results, [freePayload] frees the rest. */
 @OptIn(ExperimentalForeignApi::class)
@@ -218,8 +223,8 @@ private fun RawValue.writeTo(out: kmpjs_value) {
     out.str_len = 0
     out.stack = null
     out.stack_len = 0
-    str?.let { text ->
-        val bytes = Wtf8.encode(text)
+    val payload = bytes ?: str?.let(Wtf8::encode)
+    payload?.let { bytes ->
         val buf = kmpjs_alloc(bytes.size) ?: return
         if (bytes.isNotEmpty()) {
             bytes.usePinned { memcpy(buf, it.addressOf(0), bytes.size.toULong()) }

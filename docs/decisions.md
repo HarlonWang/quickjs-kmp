@@ -32,7 +32,7 @@ QuickJS 对象不移动，但仍不让 Kotlin 持有 JSValue：引用计数要�
 
 undefined / null / bool / number / string / object（JSON 文本）/ exception（message + stack）/ ref 八种 tag 沿用。JSON 用 `JS_JSONStringify` / `JS_ParseJSON`；异常栈取 `stack` 属性。ABI 不动是「API 同形」的物质基础。
 
-ES2025 下 JSON 过桥的损失面比 ES5 大得多，这是默认 `ObjectTransport.JSON` 的已知代价，写明而不隐藏：Map / Set 序列化为 `{}`，Date 变 ISO 字符串，BigInt 抛 TypeError，ArrayBuffer / TypedArray 变 `{}`，`undefined` 属性与函数属性丢失，循环引用抛错。需要保真的场景用 `ObjectTransport.REF`。在此之上新增两个 tag：BIGINT（十进制文本携带）与 BINARY（ArrayBuffer / TypedArray 内容深拷贝成字节，同 quickjs-wrapper 的做法），Kotlin 侧对应 `JsValue.BigInt` 与 `JsValue.Bytes`。`JsValue` 是 sealed，子类集合在 0.1.0 前定完，之后新增就是破坏性变更。
+ES2025 下 JSON 过桥的损失面比 ES5 大得多，这是默认 `ObjectTransport.JSON` 的已知代价，写明而不隐藏：Map / Set 序列化为 `{}`，Date 变 ISO 字符串，BigInt 抛 TypeError，ArrayBuffer / TypedArray 变 `{}`，`undefined` 属性与函数属性丢失，循环引用抛错。需要保真的场景用 `ObjectTransport.REF`。在此之上新增两个 tag：BIGINT（十进制文本携带，任意长度不丢精度）与 BINARY（ArrayBuffer / SharedArrayBuffer / 各类 TypedArray 的字节深拷贝，TypedArray 只拷视图覆盖的区间，同 quickjs-wrapper 的做法），Kotlin 侧对应 `JsValue.BigInt` 与 `JsValue.Bytes`。BINARY 只在 JSON 过桥时出现：REF 模式下它们和别的对象一样交出句柄，因为 REF 的含义就是「不拷贝」。宿主交进去的 Bytes 一律变成 ArrayBuffer，视图类型由脚本自己包，避免在 tag 上再编码 12 种 TypedArray。DataView 不算二进制值，走 JSON 得到 `{}`。判型不靠 `JS_GetArrayBuffer` 抛 TypeError 再吞掉——每个普通对象都会白建一个 Error——而是引擎创建时用实例探出这几类的 class id（引擎内部的 id 顺序是 ArrayBuffer、SharedArrayBuffer、Uint8ClampedArray … Float64Array 连续排列）。`JsValue` 是 sealed，子类集合在 0.1.0 前定完，之后新增就是破坏性变更。
 
 ## 宿主函数：单一 trampoline，`JS_NewCFunctionMagic` 以 magic 携带 fn_id
 
