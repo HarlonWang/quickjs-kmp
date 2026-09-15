@@ -1,0 +1,52 @@
+name: Build
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# 原生链路需要 Xcode（iOS）、NDK + CMake（Android），只有 macOS runner 能一次跑全
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 25
+
+      - name: Install NDK
+        run: |
+          NDK_VERSION=$(grep '^android-ndk' gradle/libs.versions.toml | sed 's/.*"\(.*\)".*/\1/')
+          echo "y" | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" > /dev/null
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # Android host test 用宿主编译的 JNI 库走真实 JNI 路径；设备特有差异靠本地模拟器兜底（docs/decisions.md）
+      - name: Build and test
+        run: >
+          ./gradlew
+          :library:nativeShimTest
+          :library:macosArm64Test
+          :library:testAndroidHostTest
+          :library:compileKotlinIosArm64
+          :library:compileKotlinIosSimulatorArm64
+          :library:assembleAndroidMain
+          :library:apiCheck
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            library/build/test-results/
+          if-no-files-found: ignore
+

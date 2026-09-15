@@ -9,7 +9,7 @@
 - shim 挂 `console.log`（走 logger）与 `performance.now`
 - CMake 三端构建，JNI 与 cinterop 两套 actual，`buildNativeHostJni`
 - macOS 与 Android 宿主 JNI 测试跑通 mquickjs-kmp 的 M1 用例，加一条跨线程调用用例
-- 与 mquickjs-kmp 的差异点在此阶段落实：不链 `quickjs-libc`、无 stdlib 派生、无 NUL 结尾要求
+- 与 mquickjs-kmp 的差异点在此阶段落实：不链 `quickjs-libc`、无 stdlib 派生、无宿主生成工具；`JS_Eval` / `JS_ParseJSON` 同样要求 NUL 结尾
 
 ## M2 核心 API
 
