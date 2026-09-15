@@ -27,6 +27,8 @@ commonMain      JsEngine / JsValue / JsRef / JsRuntime / JsException（expect �
 
 **微任务在最外层调用返回前排空。** `run_begin` 判定的最外层入口在主体执行完后循环 `JS_ExecutePendingJob`，随后解包 Promise 结果、上报本次调用里未处理的 rejection，再把结果转成 `kmpjs_value`。调用主体自己的异常先于排空捕获，job 抛出的不可捕获异常（中断、OOM）才会取代结果。排空被打断时剩余 job 会被丢弃（临时 1 字节栈限额跑空队列），引擎因此不会被无限链拖死。rejection 经 `JS_SetHostPromiseRejectionTracker` 记入清单，同一 tick 里后来挂上 handler 的会被引擎再次通知并从清单移除，所以清单只在排空之后判定。
 
+**模块只认名字表。** `registerModule` 存源码，`JS_SetModuleLoaderFunc` 的 loader 在第一次 import 时查表编译并设 `import.meta.url`，normalize 原样返回说明符。`evaluateModule` 先 COMPILE_ONLY 记下 `JSModuleDef*` 再 `JS_EvalFunction`，得到的 Promise 走 `finish` 的排空与解包，fulfilled 时用记下的 `JSModuleDef*` 取 namespace 代替 Promise 的值。
+
 **引擎核心没有 `console`。** `console.log`、`print`、`performance.now` 由 shim 挂到全局对象上（`quickjs-libc` 不链接），`console.log` 走 `JsEngineConfig.logger`，非字符串参数用引擎的 `JS_PrintValue` 格式化。
 
 ## 运行时约束

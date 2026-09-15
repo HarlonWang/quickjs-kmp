@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-#define KMPJS_ABI_VERSION 3
+#define KMPJS_ABI_VERSION 4
 
 typedef struct kmpjs_engine kmpjs_engine;
 
@@ -54,6 +54,7 @@ typedef struct {
 
 /* Zero means "engine default" for every field. Sizes are bytes. */
 typedef struct {
+    const char *module_scheme; /* import.meta.url is "<scheme>:<name>"; NULL = "kmp". Copied by kmpjs_create. */
     int64_t memory_limit;   /* JS_SetMemoryLimit; 0 = unlimited */
     int64_t max_stack_size; /* JS_SetMaxStackSize; must stay below the calling thread's stack, 0 disables the check */
     int64_t gc_threshold;   /* JS_SetGCThreshold */
@@ -102,6 +103,15 @@ int32_t kmpjs_ref_set(kmpjs_engine *e, int64_t ref, const char *name, const kmpj
 int32_t kmpjs_ref_call(kmpjs_engine *e, int64_t ref, int64_t this_ref, const kmpjs_value *args,
                        int32_t argc, int32_t flags, kmpjs_value *out);
 int32_t kmpjs_ref_to_json(kmpjs_engine *e, int64_t ref, kmpjs_value *out);
+
+/* ---- ES modules ----
+   Modules are resolved from a name table only: import specifiers are looked up verbatim (no relative
+   path handling) and an unknown name throws ReferenceError. Registration keeps the source; it is
+   compiled at the first import. Registering a name twice fails. */
+int32_t kmpjs_register_module(kmpjs_engine *e, const char *name, const char *code, int32_t code_len, kmpjs_value *out);
+/* Compiles and evaluates a module. The result is the module namespace as a KMPJS_TAG_REF once the
+   module has run; a module still awaiting at top level comes back as a KMPJS_REF_PROMISE ref. */
+int32_t kmpjs_eval_module(kmpjs_engine *e, const char *code, int32_t code_len, const char *name, int32_t flags, kmpjs_value *out);
 
 /* Safe to call from any thread while the engine is alive. Stops the evaluation in
    progress; a call while no evaluation runs is a no-op. */

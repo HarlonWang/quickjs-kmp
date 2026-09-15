@@ -202,6 +202,50 @@ static void test_bigint_and_binary(void)
     (void)out;
 }
 
+static void test_modules(void)
+{
+    kmpjs_value v, out;
+    kmpjs_stats st;
+    int64_t ns;
+
+    CHECK(kmpjs_register_module(g, "counter", S("export let n = 0; export function bump() { return ++n; } export const url = import.meta.url;"), &out) == 0);
+    CHECK(kmpjs_register_module(g, "counter", S("export const dup = 1;"), &out) != 0 && str_has(&out, "already registered"));
+    CHECK(kmpjs_register_module(g, "", S("export const x = 1;"), &out) != 0);
+    CHECK(kmpjs_register_module(g, "broken", S("export const = ;"), &out) == 0);
+    CHECK(kmpjs_eval_module(g, S("import { bump, url } from 'counter'; bump(); export const seen = url;"), "a", 0, &v) == 0 && v.tag == KMPJS_TAG_REF);
+    ns = v.ref;
+    CHECK(kmpjs_ref_get(g, ns, "seen", 0, &v) == 0 && str_is(&v, "test:counter"));
+    kmpjs_ref_release(g, ns);
+    /* the module ran once: a second importer sees the shared state */
+    CHECK(kmpjs_eval_module(g, S("import { n } from 'counter'; export default n; export const missing = typeof nope;"), "b", 0, &v) == 0);
+    ns = v.ref;
+    CHECK(kmpjs_ref_get(g, ns, "default", 0, &v) == 0 && v.tag == KMPJS_TAG_NUMBER && v.num == 1);
+    CHECK(kmpjs_ref_get(g, ns, "missing", 0, &v) == 0 && str_is(&v, "undefined"));
+    kmpjs_ref_release(g, ns);
+    /* unknown names and broken sources surface when the importer runs */
+    CHECK(kmpjs_eval_module(g, S("import x from 'missing';"), "c", 0, &v) != 0 && str_has(&v, "ReferenceError") && str_has(&v, "module 'missing' is not registered"));
+    CHECK(kmpjs_eval_module(g, S("import './util.js';"), "d", 0, &v) != 0 && str_has(&v, "'./util.js' is not registered"));
+    CHECK(kmpjs_eval_module(g, S("import 'broken';"), "e", 0, &v) != 0 && str_has(&v, "SyntaxError"));
+    CHECK(kmpjs_eval_module(g, S("export const = ;"), "f", 0, &v) != 0 && str_has(&v, "SyntaxError"));
+    CHECK(kmpjs_eval_module(g, S("throw new Error('in body');"), "g", 0, &v) != 0 && str_is(&v, "Error: in body"));
+    /* top-level await: settled within the call, or pending as a promise ref */
+    CHECK(kmpjs_eval_module(g, S("const x = await Promise.resolve(41); export const y = x + 1;"), "h", 0, &v) == 0 && v.tag == KMPJS_TAG_REF);
+    ns = v.ref;
+    CHECK(kmpjs_ref_get(g, ns, "y", 0, &v) == 0 && v.num == 42);
+    kmpjs_ref_release(g, ns);
+    CHECK(kmpjs_eval_module(g, S("await new Promise(r => { globalThis.__go = r; }); export const done = true;"), "i", 0, &v) == 0 && v.tag == KMPJS_TAG_REF && ((int)v.num & KMPJS_REF_PROMISE));
+    kmpjs_ref_release(g, v.ref);
+    v = eval("__go(); 1", 0); CHECK(v.num == 1);
+    /* host functions and cyclic imports work inside modules */
+    CHECK(kmpjs_register_module(g, "ring-a", S("import { b } from 'ring-b'; export const a = 'a'; export const viaB = () => b;"), &out) == 0);
+    CHECK(kmpjs_register_module(g, "ring-b", S("import { a } from 'ring-a'; export const b = 'b'; export const viaA = () => a;"), &out) == 0);
+    CHECK(kmpjs_eval_module(g, S("import { viaB } from 'ring-a'; import { viaA } from 'ring-b'; export const r = viaB() + viaA() + report(3);"), "j", 0, &v) == 0);
+    ns = v.ref;
+    CHECK(kmpjs_ref_get(g, ns, "r", 0, &v) == 0 && str_is(&v, "ba3"));
+    kmpjs_ref_release(g, ns);
+    kmpjs_get_stats(g, &st); CHECK(st.live_refs == 0);
+}
+
 static void test_values(void)
 {
     kmpjs_value v;
@@ -237,6 +281,7 @@ static void test_host_functions(void)
     CHECK(kmpjs_define_function(g, "keep", 4, KMPJS_FLAG_REF_OBJECTS, &out) == 0);
     CHECK(kmpjs_define_function(g, "give", 5, 0, &out) == 0);
     CHECK(kmpjs_define_function(g, "nested", 6, 0, &out) == 0);
+    CHECK(kmpjs_define_function(g, "report", 7, 0, &out) == 0);
     CHECK(kmpjs_define_function(g, "tooMany", KMPJS_MAX_FN_ID + 1, 0, &out) != 0 && str_has(&out, "too many"));
     CHECK(kmpjs_define_function(g, "last", KMPJS_MAX_FN_ID, 0, &out) == 0);
     v = eval("typeof tooMany + ':' + typeof last", 0); CHECK(str_is(&v, "undefined:function"));
@@ -331,8 +376,8 @@ static void test_refs(void)
 int main(void)
 {
     kmpjs_value v;
-    kmpjs_config cfg = { 4 * 1024 * 1024, 256 * 1024, 0 };
-    kmpjs_config tiny = { 100, 0, 0 };
+    kmpjs_config cfg = { "test", 4 * 1024 * 1024, 256 * 1024, 0 };
+    kmpjs_config tiny = { NULL, 100, 0, 0 };
     g = kmpjs_create(&cfg, NULL, host, logger, rejection);
     CHECK(g != NULL);
     CHECK(kmpjs_create(&tiny, NULL, host, logger, rejection) == NULL);
@@ -342,6 +387,7 @@ int main(void)
     test_refs();
     test_promises();
     test_bigint_and_binary();
+    test_modules();
     /* destroy with refs still open must be clean */
     v = eval("({leak: 1})", KMPJS_FLAG_REF_OBJECTS); CHECK(v.tag == KMPJS_TAG_REF);
     kmpjs_destroy(g);

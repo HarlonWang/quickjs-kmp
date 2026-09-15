@@ -1,7 +1,7 @@
 package wang.harlon.quickjs
 
 internal actual class NativeEngine actual constructor(config: JsEngineConfig, internal val host: HostCallbacks) {
-    private var ptr: Long = NativeBridge.nativeCreate(config.memoryLimit, config.maxStackSize, config.gcThreshold, this)
+    private var ptr: Long = NativeBridge.nativeCreate(config.memoryLimit, config.maxStackSize, config.gcThreshold, config.moduleScheme.encodeToByteArray(), this)
 
     init {
         if (ptr == 0L) throw JsException("failed to create engine")
@@ -45,6 +45,12 @@ internal actual class NativeEngine actual constructor(config: JsEngineConfig, in
         result(NativeBridge.nativeRefCall(ptr, ref, thisRef, Array(args.size) { args[it].toNative() }, flags))
 
     actual fun refToJson(ref: Long): RawValue = result(NativeBridge.nativeRefToJson(ptr, ref))
+
+    actual fun registerModule(name: String, source: String): RawValue =
+        result(NativeBridge.nativeRegisterModule(ptr, Wtf8.encode(name), Wtf8.encode(source)))
+
+    actual fun evalModule(source: String, name: String, flags: Int): RawValue =
+        result(NativeBridge.nativeEvalModule(ptr, Wtf8.encode(source), Wtf8.encode(name), flags))
 
     actual fun stats(): IntArray = NativeBridge.nativeStats(ptr) ?: throw JsException("native call failed")
 

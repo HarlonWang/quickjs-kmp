@@ -54,6 +54,22 @@ JsEngine(JsEngineConfig(onUnhandledRejection = { e -> println("lost: ${e.message
 
 Rejections nobody handled by the time the call returns go to `onUnhandledRejection`, or to `logger` as one line when no handler is set. Interrupting a call also discards the microtasks it left behind.
 
+### ES modules
+
+Modules are looked up in a name table by the exact specifier scripts use: register the sources the page may import, then evaluate the page module and read its namespace. There is no file-system loader and no relative-path resolution, so a bundler must flatten the module graph to bare names.
+
+```kotlin
+JsEngine(JsEngineConfig(moduleScheme = "app")).use { engine ->
+    engine.registerModule("util", "export const url = import.meta.url; export function twice(n) { return n * 2; }")
+    engine.evaluateModule("import { twice, url } from 'util'; export default twice(21); export const from = url;", name = "main").use { ns ->
+        ns.get("default") // JsValue.Num(42.0)
+        ns.get("from")    // JsValue.Str("app:util")
+    }
+}
+```
+
+`evaluateModule` returns the namespace as a `JsRef`. A registered module is compiled at its first import and runs once; registering a name twice throws. Top-level `await` is supported: a module still pending when the call returns comes back as a `JsRef` with `isPromise`. Each `evaluateModule` call leaves the compiled module in the engine for its lifetime.
+
 ### Holding JS objects: `JsRef`
 
 Ask for `ObjectTransport.REF` and objects come back as live handles instead of JSON. A `JsRef` reads and writes properties, indexes arrays, calls functions with a `this` and arguments, and must be closed: the object stays alive in the engine until then.

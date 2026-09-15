@@ -92,6 +92,9 @@ class JsRuntime(
         function: JsHostFunction,
     ): Unit = withEngine { registerFunction(name, objects, function) }
 
+    /** [JsEngine.registerModule] with exclusive access; evaluate modules inside [withEngine], where the namespace ref is usable. */
+    suspend fun registerModule(name: String, source: String): Unit = withEngine { registerModule(name, source) }
+
     /** Interrupts running work, waits for it to release the engine, then closes it. */
     suspend fun shutdown() {
         if (!closed.compareAndSet(expectedValue = false, newValue = true)) return

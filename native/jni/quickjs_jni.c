@@ -101,6 +101,17 @@ static char *copy_bytes(JNIEnv *env, jbyteArray arr, int32_t *plen)
     return buf;
 }
 
+static char *dup_cstring(JNIEnv *env, jbyteArray arr)
+{
+    jsize len = (*env)->GetArrayLength(env, arr);
+    char *buf = malloc((size_t)len + 1);
+    if (!buf)
+        return NULL;
+    (*env)->GetByteArrayRegion(env, arr, 0, len, (jbyte *)buf);
+    buf[len] = '\0';
+    return buf;
+}
+
 static void set_error(kmpjs_value *result, const char *msg)
 {
     int32_t len = (int32_t)strlen(msg);
@@ -199,15 +210,21 @@ Java_wang_harlon_quickjs_NativeBridge_nativeAbiVersion(JNIEnv *env, jclass cls)
 
 JNIEXPORT jlong JNICALL
 Java_wang_harlon_quickjs_NativeBridge_nativeCreate(JNIEnv *env, jclass cls, jlong memory_limit,
-                                                   jlong max_stack_size, jlong gc_threshold, jobject target)
+                                                   jlong max_stack_size, jlong gc_threshold,
+                                                   jbyteArray module_scheme, jobject target)
 {
     jni_user *u = calloc(1, sizeof(*u));
-    kmpjs_config cfg = { memory_limit, max_stack_size, gc_threshold };
+    char *scheme = dup_cstring(env, module_scheme);
+    kmpjs_config cfg = { scheme, memory_limit, max_stack_size, gc_threshold };
     kmpjs_engine *e;
-    if (!u)
+    if (!u || !scheme) {
+        free(u);
+        free(scheme);
         return 0;
+    }
     u->target = (*env)->NewGlobalRef(env, target);
     e = kmpjs_create(&cfg, u, jni_host, jni_log, jni_rejection);
+    free(scheme);
     if (!e) {
         (*env)->DeleteGlobalRef(env, u->target);
         free(u);
@@ -281,18 +298,49 @@ Java_wang_harlon_quickjs_NativeBridge_nativeInterrupt(JNIEnv *env, jclass cls, j
     kmpjs_interrupt((kmpjs_engine *)(intptr_t)ptr);
 }
 
-/* ---- refs ---- */
+/* ---- modules ---- */
 
-static char *dup_cstring(JNIEnv *env, jbyteArray arr)
+JNIEXPORT jobject JNICALL
+Java_wang_harlon_quickjs_NativeBridge_nativeRegisterModule(JNIEnv *env, jclass cls, jlong ptr,
+                                                           jbyteArray name, jbyteArray code)
 {
-    jsize len = (*env)->GetArrayLength(env, arr);
-    char *buf = malloc((size_t)len + 1);
-    if (!buf)
+    kmpjs_value out;
+    char *name_buf = dup_cstring(env, name);
+    char *code_buf = dup_cstring(env, code);
+    jobject res;
+    if (!name_buf || !code_buf) {
+        free(name_buf);
+        free(code_buf);
         return NULL;
-    (*env)->GetByteArrayRegion(env, arr, 0, len, (jbyte *)buf);
-    buf[len] = '\0';
-    return buf;
+    }
+    kmpjs_register_module((kmpjs_engine *)(intptr_t)ptr, name_buf, code_buf, (*env)->GetArrayLength(env, code), &out);
+    res = new_value(env, &out);
+    free(name_buf);
+    free(code_buf);
+    return res;
 }
+
+JNIEXPORT jobject JNICALL
+Java_wang_harlon_quickjs_NativeBridge_nativeEvalModule(JNIEnv *env, jclass cls, jlong ptr,
+                                                       jbyteArray code, jbyteArray name, jint flags)
+{
+    kmpjs_value out;
+    char *code_buf = dup_cstring(env, code);
+    char *name_buf = dup_cstring(env, name);
+    jobject res;
+    if (!code_buf || !name_buf) {
+        free(code_buf);
+        free(name_buf);
+        return NULL;
+    }
+    kmpjs_eval_module((kmpjs_engine *)(intptr_t)ptr, code_buf, (*env)->GetArrayLength(env, code), name_buf, flags, &out);
+    res = new_value(env, &out);
+    free(code_buf);
+    free(name_buf);
+    return res;
+}
+
+/* ---- refs ---- */
 
 JNIEXPORT void JNICALL
 Java_wang_harlon_quickjs_NativeBridge_nativeRefRetain(JNIEnv *env, jclass cls, jlong ptr, jlong ref)

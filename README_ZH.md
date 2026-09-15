@@ -54,6 +54,22 @@ JsEngine(JsEngineConfig(onUnhandledRejection = { e -> println("lost: ${e.message
 
 调用返回时仍没人处理的 rejection 交给 `onUnhandledRejection`，没设 handler 时经 `logger` 输出一行。中断一次调用也会丢弃它留下的微任务。
 
+### ES 模块
+
+模块按脚本里写的说明符原文查名字表：先注册页面可能 import 的源码，再求值页面模块、读它的 namespace。没有文件系统 loader，也不解析相对路径，构建工具要把模块图打平成裸说明符。
+
+```kotlin
+JsEngine(JsEngineConfig(moduleScheme = "app")).use { engine ->
+    engine.registerModule("util", "export const url = import.meta.url; export function twice(n) { return n * 2; }")
+    engine.evaluateModule("import { twice, url } from 'util'; export default twice(21); export const from = url;", name = "main").use { ns ->
+        ns.get("default") // JsValue.Num(42.0)
+        ns.get("from")    // JsValue.Str("app:util")
+    }
+}
+```
+
+`evaluateModule` 以 `JsRef` 返回 namespace。注册的模块在第一次 import 时编译、只执行一次；同名重复注册会抛异常。支持顶层 `await`：调用返回时仍未完成的模块以带 `isPromise` 的 `JsRef` 返回。每次 `evaluateModule` 都会把编译后的模块留在引擎里直到引擎关闭。
+
 ### 持有 JS 对象：`JsRef`
 
 指定 `ObjectTransport.REF`，对象就以句柄而非 JSON 返回。`JsRef` 可以读写属性、按下标访问数组、带 `this` 与参数调用函数，用完必须 close：在此之前对象一直活在引擎里。
