@@ -18,7 +18,7 @@
 - `JsRuntime`：Mutex、dispatcher、interrupt、超时；`JsEngineConfig` 的 `memoryLimit` / `maxStackSize`（默认 256 KB）/ `gcThreshold`；用例「catch 块内仍能被中断」
 - ~~**微任务排空**（只在最外层）与 **Promise 结果**~~ 已完成，含中断后丢弃残留 job
 - ~~未处理 rejection：`JS_SetHostPromiseRejectionTracker` → `JsEngineConfig.onUnhandledRejection`~~ 已完成
-- **模块**：`registerModule` 名字表、loader 回调、`evaluateModule`；新增模块用例（import 命中表、命中失败、顶层 await、namespace 访问）
+- ~~**模块**：`registerModule` 名字表、loader 回调、`evaluateModule`；新增模块用例（import 命中表、命中失败、顶层 await、namespace 访问）~~ 已完成（源码形态；字节码重载归 M3）
 - `stats()` 映射 `JS_ComputeMemoryUsage`；`JsRefLeakTest`
 
 ## M3 字节码、工具与发布

@@ -50,6 +50,9 @@ internal expect class NativeEngine(config: JsEngineConfig, host: HostCallbacks) 
     fun refCall(ref: Long, thisRef: Long, args: List<RawValue>, flags: Int): RawValue
     fun refToJson(ref: Long): RawValue
 
+    fun registerModule(name: String, source: String): RawValue
+    fun evalModule(source: String, name: String, flags: Int): RawValue
+
     /** [liveRefs, refSlots] as in kmpjs_stats. */
     fun stats(): IntArray
     fun dumpMemory(): RawValue

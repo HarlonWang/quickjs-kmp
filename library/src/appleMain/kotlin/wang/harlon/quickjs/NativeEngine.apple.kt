@@ -27,6 +27,8 @@ import wang.harlon.quickjs.cinterop.kmpjs_create
 import wang.harlon.quickjs.cinterop.kmpjs_define_function
 import wang.harlon.quickjs.cinterop.kmpjs_destroy
 import wang.harlon.quickjs.cinterop.kmpjs_dump_memory
+import wang.harlon.quickjs.cinterop.kmpjs_eval_module
+import wang.harlon.quickjs.cinterop.kmpjs_register_module
 import wang.harlon.quickjs.cinterop.kmpjs_get_stats
 import wang.harlon.quickjs.cinterop.kmpjs_eval
 import wang.harlon.quickjs.cinterop.kmpjs_free
@@ -53,6 +55,7 @@ internal actual class NativeEngine actual constructor(config: JsEngineConfig, in
             cfg.memory_limit = config.memoryLimit
             cfg.max_stack_size = config.maxStackSize
             cfg.gc_threshold = config.gcThreshold
+            cfg.module_scheme = cString(config.moduleScheme)
             kmpjs_create(cfg.ptr, ref.asCPointer(), hostCallback, logCallback, rejectionCallback)
         }
         if (engine == null) {
@@ -129,6 +132,29 @@ internal actual class NativeEngine actual constructor(config: JsEngineConfig, in
         args.forEachIndexed { i, raw -> raw.writeTo(values[i]) }
         kmpjs_ref_call(handle(), ref, thisRef, if (args.isEmpty()) null else values, args.size, flags, out.ptr)
         for (i in args.indices) values[i].freePayload()
+        out.toRaw()
+    }
+
+    actual fun registerModule(name: String, source: String): RawValue = memScoped {
+        val out = alloc<kmpjs_value>()
+        val bytes = Wtf8.encode(source)
+        if (bytes.isEmpty()) {
+            kmpjs_register_module(handle(), cString(name), null, 0, out.ptr)
+        } else {
+            bytes.usePinned { kmpjs_register_module(handle(), cString(name), it.addressOf(0), bytes.size, out.ptr) }
+        }
+        out.toRaw()
+    }
+
+    actual fun evalModule(source: String, name: String, flags: Int): RawValue = memScoped {
+        val out = alloc<kmpjs_value>()
+        val moduleName = cString(name)
+        val bytes = Wtf8.encode(source)
+        if (bytes.isEmpty()) {
+            kmpjs_eval_module(handle(), null, 0, moduleName, flags, out.ptr)
+        } else {
+            bytes.usePinned { kmpjs_eval_module(handle(), it.addressOf(0), bytes.size, moduleName, flags, out.ptr) }
+        }
         out.toRaw()
     }
 

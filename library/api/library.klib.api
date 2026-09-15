@@ -115,13 +115,15 @@ final class wang.harlon.quickjs/JsEngine : kotlin/AutoCloseable { // wang.harlon
     final fun close() // wang.harlon.quickjs/JsEngine.close|close(){}[0]
     final fun dumpMemory(): kotlin/String // wang.harlon.quickjs/JsEngine.dumpMemory|dumpMemory(){}[0]
     final fun evaluate(kotlin/String, kotlin/String = ..., wang.harlon.quickjs/ObjectTransport = ...): wang.harlon.quickjs/JsValue // wang.harlon.quickjs/JsEngine.evaluate|evaluate(kotlin.String;kotlin.String;wang.harlon.quickjs.ObjectTransport){}[0]
+    final fun evaluateModule(kotlin/String, kotlin/String = ...): wang.harlon.quickjs/JsRef // wang.harlon.quickjs/JsEngine.evaluateModule|evaluateModule(kotlin.String;kotlin.String){}[0]
     final fun interrupt() // wang.harlon.quickjs/JsEngine.interrupt|interrupt(){}[0]
     final fun registerFunction(kotlin/String, wang.harlon.quickjs/ObjectTransport = ..., wang.harlon.quickjs/JsHostFunction) // wang.harlon.quickjs/JsEngine.registerFunction|registerFunction(kotlin.String;wang.harlon.quickjs.ObjectTransport;wang.harlon.quickjs.JsHostFunction){}[0]
+    final fun registerModule(kotlin/String, kotlin/String) // wang.harlon.quickjs/JsEngine.registerModule|registerModule(kotlin.String;kotlin.String){}[0]
     final fun stats(): wang.harlon.quickjs/JsEngineStats // wang.harlon.quickjs/JsEngine.stats|stats(){}[0]
 }
 
 final class wang.harlon.quickjs/JsEngineConfig { // wang.harlon.quickjs/JsEngineConfig|null[0]
-    constructor <init>(kotlin/Long = ..., kotlin/Long = ..., kotlin/Long = ..., kotlin/Function1<kotlin/String, kotlin/Unit>? = ..., kotlin/Function1<wang.harlon.quickjs/JsException, kotlin/Unit>? = ...) // wang.harlon.quickjs/JsEngineConfig.<init>|<init>(kotlin.Long;kotlin.Long;kotlin.Long;kotlin.Function1<kotlin.String,kotlin.Unit>?;kotlin.Function1<wang.harlon.quickjs.JsException,kotlin.Unit>?){}[0]
+    constructor <init>(kotlin/Long = ..., kotlin/Long = ..., kotlin/Long = ..., kotlin/Function1<kotlin/String, kotlin/Unit>? = ..., kotlin/Function1<wang.harlon.quickjs/JsException, kotlin/Unit>? = ..., kotlin/String = ...) // wang.harlon.quickjs/JsEngineConfig.<init>|<init>(kotlin.Long;kotlin.Long;kotlin.Long;kotlin.Function1<kotlin.String,kotlin.Unit>?;kotlin.Function1<wang.harlon.quickjs.JsException,kotlin.Unit>?;kotlin.String){}[0]
 
     final val gcThreshold // wang.harlon.quickjs/JsEngineConfig.gcThreshold|{}gcThreshold[0]
         final fun <get-gcThreshold>(): kotlin/Long // wang.harlon.quickjs/JsEngineConfig.gcThreshold.<get-gcThreshold>|<get-gcThreshold>(){}[0]
@@ -131,6 +133,8 @@ final class wang.harlon.quickjs/JsEngineConfig { // wang.harlon.quickjs/JsEngine
         final fun <get-maxStackSize>(): kotlin/Long // wang.harlon.quickjs/JsEngineConfig.maxStackSize.<get-maxStackSize>|<get-maxStackSize>(){}[0]
     final val memoryLimit // wang.harlon.quickjs/JsEngineConfig.memoryLimit|{}memoryLimit[0]
         final fun <get-memoryLimit>(): kotlin/Long // wang.harlon.quickjs/JsEngineConfig.memoryLimit.<get-memoryLimit>|<get-memoryLimit>(){}[0]
+    final val moduleScheme // wang.harlon.quickjs/JsEngineConfig.moduleScheme|{}moduleScheme[0]
+        final fun <get-moduleScheme>(): kotlin/String // wang.harlon.quickjs/JsEngineConfig.moduleScheme.<get-moduleScheme>|<get-moduleScheme>(){}[0]
     final val onUnhandledRejection // wang.harlon.quickjs/JsEngineConfig.onUnhandledRejection|{}onUnhandledRejection[0]
         final fun <get-onUnhandledRejection>(): kotlin/Function1<wang.harlon.quickjs/JsException, kotlin/Unit>? // wang.harlon.quickjs/JsEngineConfig.onUnhandledRejection.<get-onUnhandledRejection>|<get-onUnhandledRejection>(){}[0]
 
@@ -186,6 +190,7 @@ final class wang.harlon.quickjs/JsRuntime : kotlin/AutoCloseable { // wang.harlo
     final suspend fun <#A1: kotlin/Any?> withEngine(kotlin/Function1<wang.harlon.quickjs/JsEngine, #A1>): #A1 // wang.harlon.quickjs/JsRuntime.withEngine|withEngine(kotlin.Function1<wang.harlon.quickjs.JsEngine,0:0>){0§<kotlin.Any?>}[0]
     final suspend fun evaluate(kotlin/String, kotlin/String = ..., wang.harlon.quickjs/ObjectTransport = ..., kotlin.time/Duration? = ...): wang.harlon.quickjs/JsValue // wang.harlon.quickjs/JsRuntime.evaluate|evaluate(kotlin.String;kotlin.String;wang.harlon.quickjs.ObjectTransport;kotlin.time.Duration?){}[0]
     final suspend fun registerFunction(kotlin/String, wang.harlon.quickjs/ObjectTransport = ..., wang.harlon.quickjs/JsHostFunction) // wang.harlon.quickjs/JsRuntime.registerFunction|registerFunction(kotlin.String;wang.harlon.quickjs.ObjectTransport;wang.harlon.quickjs.JsHostFunction){}[0]
+    final suspend fun registerModule(kotlin/String, kotlin/String) // wang.harlon.quickjs/JsRuntime.registerModule|registerModule(kotlin.String;kotlin.String){}[0]
     final suspend fun shutdown() // wang.harlon.quickjs/JsRuntime.shutdown|shutdown(){}[0]
 }
 

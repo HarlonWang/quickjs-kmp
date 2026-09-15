@@ -10,6 +10,7 @@ package wang.harlon.quickjs
  * @property onUnhandledRejection receives every promise rejected during an engine call and still
  * unhandled when that call returns; when null the rejection goes to [logger] as one line. Exceptions
  * it throws are swallowed.
+ * @property moduleScheme prefix of `import.meta.url`, which reads `<moduleScheme>:<module name>`.
  */
 class JsEngineConfig(
     val memoryLimit: Long = 0,
@@ -17,11 +18,13 @@ class JsEngineConfig(
     val gcThreshold: Long = 0,
     val logger: ((String) -> Unit)? = null,
     val onUnhandledRejection: ((JsException) -> Unit)? = null,
+    val moduleScheme: String = "kmp",
 ) {
     init {
         require(memoryLimit >= 0) { "memoryLimit must not be negative" }
         require(maxStackSize >= 0) { "maxStackSize must not be negative" }
         require(gcThreshold >= 0) { "gcThreshold must not be negative" }
+        require(moduleScheme.isNotEmpty() && ':' !in moduleScheme) { "moduleScheme must be a non-empty URL scheme" }
     }
 
     companion object {
