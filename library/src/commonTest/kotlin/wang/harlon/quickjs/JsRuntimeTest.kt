@@ -1,6 +1,9 @@
 package wang.harlon.quickjs
 
 import kotlin.test.Test
+import kotlinx.coroutines.newSingleThreadContext
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
@@ -18,6 +21,27 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 
 class JsRuntimeTest {
+    // 引擎在一个线程创建、在另一个线程使用：栈溢出检查必须跟着线程走，深递归要报 RangeError 而不是段错误或误报
+    @OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class)
+    @Test
+    fun engineCreatedOnOneThreadRunsOnAnotherWithTheStackCheckIntact() = runTest {
+        val creator = newSingleThreadContext("creator")
+        val worker = newSingleThreadContext("worker")
+        try {
+            val engine = withContext(creator) { JsEngine() }
+            withContext(worker) {
+                assertEquals(JsValue.Num(100), engine.evaluate("function depth(n) { return n === 0 ? 0 : 1 + depth(n - 1); } depth(100)"))
+                val e = assertFailsWith<JsException> { engine.evaluate("function forever() { return forever() + 1; } forever()") }
+                assertTrue(e.message.orEmpty().contains("stack overflow"), "message was: ${e.message}")
+                assertEquals(JsValue.Num(1), engine.evaluate("1"))
+            }
+            withContext(creator) { engine.close() }
+        } finally {
+            creator.close()
+            worker.close()
+        }
+    }
+
     // 走 Dispatchers.Default 跳出 runTest 的虚拟时间，超时与真实阻塞求值才能对上
     private fun realTime(block: suspend () -> Unit) = runTest(timeout = 60.seconds) {
         withContext(Dispatchers.Default) { block() }

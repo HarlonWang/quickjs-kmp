@@ -73,6 +73,18 @@ class JsRefLeakTest {
     }
 
     @Test
+    fun statsReportTheEngineHeap() = JsEngine(JsEngineConfig(memoryLimit = 8L * 1024 * 1024)).use { engine ->
+        val before = engine.stats()
+        assertTrue(before.memoryUsed > 0 && before.objectCount > 0 && before.atomCount > 0, "stats were: $before")
+        assertEquals(8L * 1024 * 1024, before.memoryLimit)
+        engine.evaluate("function keep() {} var big = new Array(10000).fill(0).map((_, i) => ({i, s: 'item ' + i}));")
+        val after = engine.stats()
+        assertTrue(after.memoryUsed > before.memoryUsed && after.objectCount > before.objectCount + 9000, "before: $before, after: $after")
+        assertTrue(after.stringCount > before.stringCount + 9000 && after.functionCount > before.functionCount, "before: $before, after: $after")
+        JsEngine().use { assertEquals(0L, it.stats().memoryLimit) }
+    }
+
+    @Test
     fun dumpMemoryDescribesTheHeap() = JsEngine().use { engine ->
         engine.evaluate("var keep = [1, 2, 3];")
         val dump = engine.dumpMemory()

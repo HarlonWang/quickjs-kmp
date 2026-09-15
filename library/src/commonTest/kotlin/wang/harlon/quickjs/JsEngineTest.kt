@@ -120,6 +120,19 @@ class JsEngineTest {
     }
 
     @Test
+    fun interruptCannotBeCaughtByScript() = JsEngine().use { engine ->
+        engine.registerFunction("stop") {
+            engine.interrupt()
+            JsValue.Undefined
+        }
+        val e = assertFailsWith<JsException> {
+            engine.evaluate("var caught = false; try { stop(); for (;;) {} } catch (e) { caught = true; } 'survived'")
+        }
+        assertTrue(e.message.orEmpty().contains("interrupted"), "message was: ${e.message}")
+        assertEquals(JsValue.Bool(false), engine.evaluate("caught"))
+    }
+
+    @Test
     fun interruptWhileIdleIsIgnored() = JsEngine().use { engine ->
         engine.interrupt()
         assertEquals(JsValue.Num(2), engine.evaluate("1 + 1"))

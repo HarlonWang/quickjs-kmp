@@ -85,7 +85,7 @@ JsEngine().use { engine ->
 }
 ```
 
-Host functions registered with `ObjectTransport.REF` receive refs that live only for the duration of the call; `retain()` keeps one. `engine.stats().liveRefs` tells you how many refs are still open, which is how the SDK's own tests prove nothing leaks.
+Host functions registered with `ObjectTransport.REF` receive refs that live only for the duration of the call; `retain()` keeps one. `engine.stats()` reports how many refs are still open (which is how the SDK's own tests prove nothing leaks) together with the engine's own memory accounting: bytes used, the configured limit, and object / string / atom / function counts.
 
 ### Typed values: kotlinx.serialization
 

@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-#define KMPJS_ABI_VERSION 4
+#define KMPJS_ABI_VERSION 5
 
 typedef struct kmpjs_engine kmpjs_engine;
 
@@ -122,6 +122,13 @@ void kmpjs_interrupt(kmpjs_engine *e);
 typedef struct {
     int32_t live_refs;  /* outstanding releases: every retain adds one */
     int32_t ref_slots;  /* slots allocated so far (live + reusable) */
+    /* from JS_ComputeMemoryUsage */
+    int64_t memory_used;   /* bytes currently allocated by the engine */
+    int64_t memory_limit;  /* configured limit, 0 when unlimited */
+    int64_t object_count;
+    int64_t string_count;
+    int64_t atom_count;
+    int64_t function_count;
 } kmpjs_stats;
 
 void kmpjs_get_stats(kmpjs_engine *e, kmpjs_stats *stats);

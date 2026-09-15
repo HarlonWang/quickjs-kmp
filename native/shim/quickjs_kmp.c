@@ -592,12 +592,20 @@ void kmpjs_ref_release(kmpjs_engine *e, int64_t ref)
 
 void kmpjs_get_stats(kmpjs_engine *e, kmpjs_stats *stats)
 {
+    JSMemoryUsage usage;
     int32_t i, live = 0;
     /* refcount, not slots: a retained ref counts once per outstanding release */
     for (i = 0; i < e->slot_count; i++)
         live += e->slots[i].refcount;
     stats->live_refs = live;
     stats->ref_slots = e->slot_count;
+    JS_ComputeMemoryUsage(e->rt, &usage);
+    stats->memory_used = usage.malloc_size;
+    stats->memory_limit = usage.malloc_limit > 0 && usage.malloc_limit != INT64_MAX ? usage.malloc_limit : 0;
+    stats->object_count = usage.obj_count;
+    stats->string_count = usage.str_count;
+    stats->atom_count = usage.atom_count;
+    stats->function_count = usage.js_func_count;
 }
 
 void kmpjs_dump_memory(kmpjs_engine *e, kmpjs_value *out)

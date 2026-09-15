@@ -385,6 +385,10 @@ static void test_refs(void)
     kmpjs_get_stats(g, &st);
     CHECK(st.live_refs == 0);
     kmpjs_dump_memory(g, &v); CHECK(v.tag == KMPJS_TAG_STRING && v.str_len > 0);
+    CHECK(st.memory_used > 0 && st.memory_limit == 4 * 1024 * 1024 && st.object_count > 0 && st.string_count > 0 && st.atom_count > 0 && st.function_count > 0);
+    v = eval("var big = new Array(10000).fill(0).map((_, i) => ({i})); 1", 0);
+    { kmpjs_stats after; kmpjs_get_stats(g, &after); CHECK(after.memory_used > st.memory_used && after.object_count > st.object_count + 9000); }
+    v = eval("big = null; 1", 0);
 }
 
 int main(void)

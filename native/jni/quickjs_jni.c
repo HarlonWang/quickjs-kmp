@@ -428,18 +428,24 @@ Java_wang_harlon_quickjs_NativeBridge_nativeRefToJson(JNIEnv *env, jclass cls, j
     return new_value(env, &out);
 }
 
-JNIEXPORT jintArray JNICALL
+JNIEXPORT jlongArray JNICALL
 Java_wang_harlon_quickjs_NativeBridge_nativeStats(JNIEnv *env, jclass cls, jlong ptr)
 {
     kmpjs_stats st;
-    jint values[2];
-    jintArray arr = (*env)->NewIntArray(env, 2);
+    jlong values[8];
+    jlongArray arr = (*env)->NewLongArray(env, 8);
     if (!arr)
         return NULL;
     kmpjs_get_stats((kmpjs_engine *)(intptr_t)ptr, &st);
     values[0] = st.live_refs;
     values[1] = st.ref_slots;
-    (*env)->SetIntArrayRegion(env, arr, 0, 2, values);
+    values[2] = st.memory_used;
+    values[3] = st.memory_limit;
+    values[4] = st.object_count;
+    values[5] = st.string_count;
+    values[6] = st.atom_count;
+    values[7] = st.function_count;
+    (*env)->SetLongArrayRegion(env, arr, 0, 8, values);
     return arr;
 }
 

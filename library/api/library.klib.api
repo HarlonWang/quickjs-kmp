@@ -145,12 +145,24 @@ final class wang.harlon.quickjs/JsEngineConfig { // wang.harlon.quickjs/JsEngine
 }
 
 final class wang.harlon.quickjs/JsEngineStats { // wang.harlon.quickjs/JsEngineStats|null[0]
-    constructor <init>(kotlin/Int, kotlin/Int) // wang.harlon.quickjs/JsEngineStats.<init>|<init>(kotlin.Int;kotlin.Int){}[0]
+    constructor <init>(kotlin/Int, kotlin/Int, kotlin/Long, kotlin/Long, kotlin/Long, kotlin/Long, kotlin/Long, kotlin/Long) // wang.harlon.quickjs/JsEngineStats.<init>|<init>(kotlin.Int;kotlin.Int;kotlin.Long;kotlin.Long;kotlin.Long;kotlin.Long;kotlin.Long;kotlin.Long){}[0]
 
+    final val atomCount // wang.harlon.quickjs/JsEngineStats.atomCount|{}atomCount[0]
+        final fun <get-atomCount>(): kotlin/Long // wang.harlon.quickjs/JsEngineStats.atomCount.<get-atomCount>|<get-atomCount>(){}[0]
+    final val functionCount // wang.harlon.quickjs/JsEngineStats.functionCount|{}functionCount[0]
+        final fun <get-functionCount>(): kotlin/Long // wang.harlon.quickjs/JsEngineStats.functionCount.<get-functionCount>|<get-functionCount>(){}[0]
     final val liveRefs // wang.harlon.quickjs/JsEngineStats.liveRefs|{}liveRefs[0]
         final fun <get-liveRefs>(): kotlin/Int // wang.harlon.quickjs/JsEngineStats.liveRefs.<get-liveRefs>|<get-liveRefs>(){}[0]
+    final val memoryLimit // wang.harlon.quickjs/JsEngineStats.memoryLimit|{}memoryLimit[0]
+        final fun <get-memoryLimit>(): kotlin/Long // wang.harlon.quickjs/JsEngineStats.memoryLimit.<get-memoryLimit>|<get-memoryLimit>(){}[0]
+    final val memoryUsed // wang.harlon.quickjs/JsEngineStats.memoryUsed|{}memoryUsed[0]
+        final fun <get-memoryUsed>(): kotlin/Long // wang.harlon.quickjs/JsEngineStats.memoryUsed.<get-memoryUsed>|<get-memoryUsed>(){}[0]
+    final val objectCount // wang.harlon.quickjs/JsEngineStats.objectCount|{}objectCount[0]
+        final fun <get-objectCount>(): kotlin/Long // wang.harlon.quickjs/JsEngineStats.objectCount.<get-objectCount>|<get-objectCount>(){}[0]
     final val refSlots // wang.harlon.quickjs/JsEngineStats.refSlots|{}refSlots[0]
         final fun <get-refSlots>(): kotlin/Int // wang.harlon.quickjs/JsEngineStats.refSlots.<get-refSlots>|<get-refSlots>(){}[0]
+    final val stringCount // wang.harlon.quickjs/JsEngineStats.stringCount|{}stringCount[0]
+        final fun <get-stringCount>(): kotlin/Long // wang.harlon.quickjs/JsEngineStats.stringCount.<get-stringCount>|<get-stringCount>(){}[0]
 
     final fun toString(): kotlin/String // wang.harlon.quickjs/JsEngineStats.toString|toString(){}[0]
 }
