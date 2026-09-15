@@ -18,6 +18,9 @@ class JsRef internal constructor(
 
     private var closed = false
 
+    /** Host-function arguments: the engine releases them after the call, [close] only marks them unusable. */
+    internal var transient = false
+
     /**
      * Whether this handle is still usable; false after [close], after the engine is closed, or,
      * for host-function arguments, after the call.
@@ -59,12 +62,7 @@ class JsRef internal constructor(
     override fun close() {
         if (closed) return
         closed = true
-        engine.releaseRef(id)
-    }
-
-    /** Marks a transient ref unusable without releasing it: the engine releases it itself after the call. */
-    internal fun invalidate() {
-        closed = true
+        if (!transient) engine.releaseRef(id)
     }
 
     private fun op(block: JsEngine.() -> RawValue?): JsValue {

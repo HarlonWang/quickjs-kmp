@@ -20,10 +20,11 @@ class JsEngine(private val config: JsEngineConfig = JsEngineConfig()) : AutoClos
         // 传给宿主函数的 ref 只在本次调用内有效：返回后失效，原生侧随即释放；retain() 的副本不受影响
         override fun onHostCall(id: Int, args: List<RawValue>): RawValue {
             val decoded = args.map { decode(it) }
+            decoded.forEach { (it as? JsRef)?.transient = true }
             try {
                 return encode(functions[id].invoke(decoded))
             } finally {
-                decoded.forEach { (it as? JsRef)?.invalidate() }
+                decoded.forEach { (it as? JsRef)?.close() }
             }
         }
 

@@ -143,6 +143,9 @@ static void test_host_functions(void)
     CHECK(kmpjs_define_function(g, "keep", 4, KMPJS_FLAG_REF_OBJECTS, &out) == 0);
     CHECK(kmpjs_define_function(g, "give", 5, 0, &out) == 0);
     CHECK(kmpjs_define_function(g, "nested", 6, 0, &out) == 0);
+    CHECK(kmpjs_define_function(g, "tooMany", KMPJS_MAX_FN_ID + 1, 0, &out) != 0 && str_has(&out, "too many"));
+    CHECK(kmpjs_define_function(g, "last", KMPJS_MAX_FN_ID, 0, &out) == 0);
+    v = eval("typeof tooMany + ':' + typeof last", 0); CHECK(str_is(&v, "undefined:function"));
     v = eval("record(1, 'two', true, null, {k: [3]})", 0); CHECK(v.tag == KMPJS_TAG_STRING && str_is(&v, "ok:5"));
     v = eval("try { boom() } catch (e) { 'caught: ' + e.message }", 0); CHECK(str_is(&v, "caught: host failed"));
     v = eval("boom()", 0); CHECK(v.tag == KMPJS_TAG_EXCEPTION && str_is(&v, "Error: host failed"));

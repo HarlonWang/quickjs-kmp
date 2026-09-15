@@ -109,6 +109,22 @@ class JsRefTest {
     }
 
     @Test
+    fun closingATransientArgumentKeepsTheRetainedCopyAlive() = JsEngine().use { engine ->
+        var kept: JsRef? = null
+        engine.registerFunction("keep", ObjectTransport.REF) { args ->
+            val arg = args[0] as JsRef
+            kept = arg.retain()
+            arg.close()
+            JsValue.Undefined
+        }
+        engine.evaluate("keep({k: 'kept'})")
+        assertEquals(JsValue.Str("kept"), kept!!.get("k"))
+        assertEquals(1, engine.stats().liveRefs)
+        kept!!.close()
+        assertEquals(0, engine.stats().liveRefs)
+    }
+
+    @Test
     fun transientHostArgumentIsInvalidAfterTheCall() = JsEngine().use { engine ->
         var escaped: JsRef? = null
         engine.registerFunction("grab", ObjectTransport.REF) { args ->

@@ -162,7 +162,11 @@ internal actual class NativeEngine actual constructor(config: JsEngineConfig, in
                 raw.writeTo(out)
                 if (raw.tag == NativeTag.EXCEPTION) 1 else 0
             } catch (t: Throwable) {
-                t.toHostError().writeTo(out)
+                try {
+                    t.toHostError().writeTo(out)
+                } catch (_: Throwable) {
+                    RawValue(NativeTag.EXCEPTION).writeTo(out)
+                }
                 1
             }
         }

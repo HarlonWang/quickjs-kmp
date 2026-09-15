@@ -685,10 +685,13 @@ int32_t kmpjs_define_function(kmpjs_engine *e, const char *name, int32_t fn_id, 
 {
     JSContext *ctx = e->ctx;
     int magic = (fn_id << 1) | (flags & KMPJS_FLAG_REF_OBJECTS);
-    JSValue fn = JS_NewCFunctionMagic(ctx, js_kmp_host, name, 0, JS_CFUNC_generic_magic, magic);
-    JSValue global;
+    JSValue fn, global;
     int rc;
 
+    /* the engine stores magic as int16_t: fn_id must fit in 14 bits next to the flag bit */
+    if (fn_id < 0 || fn_id > KMPJS_MAX_FN_ID)
+        return fail_message(e, out, "too many host functions");
+    fn = JS_NewCFunctionMagic(ctx, js_kmp_host, name, 0, JS_CFUNC_generic_magic, magic);
     if (JS_IsException(fn)) {
         exception_to_out(e, out);
         return -1;
@@ -711,7 +714,7 @@ static JSValue js_kmp_host(JSContext *ctx, JSValueConst this_val, int argc, JSVa
     int32_t flags = magic & KMPJS_FLAG_REF_OBJECTS;
     kmpjs_value *args = NULL;
     kmp_buf *bufs = NULL;
-    kmpjs_value result;
+    kmpjs_value result = {0};
     JSValue ret = JS_EXCEPTION;
     int i, rc, converted = 0;
 
@@ -730,7 +733,6 @@ static JSValue js_kmp_host(JSContext *ctx, JSValueConst this_val, int argc, JSVa
             goto done;
         converted++;
     }
-    memset(&result, 0, sizeof(result));
     rc = e->host(e->user, fn_id, args, argc, &result);
     if (rc != 0)
         ret = throw_message(ctx, result.str, result.str_len);

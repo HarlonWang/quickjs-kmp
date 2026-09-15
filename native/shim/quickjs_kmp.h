@@ -30,6 +30,9 @@ enum {
     KMPJS_REF_ARRAY = 2,
 };
 
+/* kmpjs_define_function rejects fn_id above this (the engine keeps the id in 14 bits) */
+#define KMPJS_MAX_FN_ID 0x3FFF
+
 /* flags for kmpjs_eval / kmpjs_define_function / kmpjs_ref_* */
 enum {
     KMPJS_FLAG_REF_OBJECTS = 1, /* hand objects out as KMPJS_TAG_REF instead of JSON */
