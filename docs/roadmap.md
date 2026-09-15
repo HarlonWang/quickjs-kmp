@@ -11,15 +11,15 @@
 - macOS 与 Android 宿主 JNI 测试跑通 mquickjs-kmp 的 M1 用例，加一条跨线程调用用例
 - 与 mquickjs-kmp 的差异点在此阶段落实：不链 `quickjs-libc`、无 stdlib 派生、无宿主生成工具；`JS_Eval` / `JS_ParseJSON` 同样要求 NUL 结尾
 
-## M2 核心 API
+## M2 核心 API（已完成）
 
-- 句柄表（连续数组、dup / free 版本）、`JsRef`、`ObjectTransport`、transient / retain；引擎 close 的固定顺序，ASan 用例「持有未 close 的 JsRef 时 close 引擎」
+- ~~句柄表（连续数组、dup / free 版本）、`JsRef`、`ObjectTransport`、transient / retain；引擎 close 的固定顺序，ASan 用例「持有未 close 的 JsRef 时 close 引擎」~~ 已完成
 - ~~新增 tag：BIGINT、BINARY；`JsValue.BigInt` / `JsValue.Bytes`~~ 已完成
-- `JsRuntime`：Mutex、dispatcher、interrupt、超时；`JsEngineConfig` 的 `memoryLimit` / `maxStackSize`（默认 256 KB）/ `gcThreshold`；用例「catch 块内仍能被中断」
+- ~~`JsRuntime`：Mutex、dispatcher、interrupt、超时；`JsEngineConfig` 的 `memoryLimit` / `maxStackSize`（默认 256 KB）/ `gcThreshold`；用例「catch 块内仍能被中断」~~ 已完成（含跨线程调用用例）
 - ~~**微任务排空**（只在最外层）与 **Promise 结果**~~ 已完成，含中断后丢弃残留 job
 - ~~未处理 rejection：`JS_SetHostPromiseRejectionTracker` → `JsEngineConfig.onUnhandledRejection`~~ 已完成
 - ~~**模块**：`registerModule` 名字表、loader 回调、`evaluateModule`；新增模块用例（import 命中表、命中失败、顶层 await、namespace 访问）~~ 已完成（源码形态；字节码重载归 M3）
-- `stats()` 映射 `JS_ComputeMemoryUsage`；`JsRefLeakTest`
+- ~~`stats()` 映射 `JS_ComputeMemoryUsage`；`JsRefLeakTest`~~ 已完成
 
 ## M3 字节码、工具与发布
 

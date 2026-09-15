@@ -85,7 +85,7 @@ JsEngine().use { engine ->
 }
 ```
 
-以 `ObjectTransport.REF` 注册的宿主函数收到的 ref 只在本次调用内有效，`retain()` 可以留住一个。`engine.stats().liveRefs` 报告还有多少 ref 没关，SDK 自己的测试就是靠它证明没有泄漏。
+以 `ObjectTransport.REF` 注册的宿主函数收到的 ref 只在本次调用内有效，`retain()` 可以留住一个。`engine.stats()` 报告还有多少 ref 没关（SDK 自己的测试就是靠它证明没有泄漏），以及引擎自己的内存账目：已用字节、配置的限额、对象 / 字符串 / atom / 函数计数。
 
 ### 类型化的值：kotlinx.serialization
 

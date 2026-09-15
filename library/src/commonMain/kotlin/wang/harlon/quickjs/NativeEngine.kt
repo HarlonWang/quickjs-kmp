@@ -53,8 +53,8 @@ internal expect class NativeEngine(config: JsEngineConfig, host: HostCallbacks) 
     fun registerModule(name: String, source: String): RawValue
     fun evalModule(source: String, name: String, flags: Int): RawValue
 
-    /** [liveRefs, refSlots] as in kmpjs_stats. */
-    fun stats(): IntArray
+    /** The kmpjs_stats fields in declaration order. */
+    fun stats(): LongArray
     fun dumpMemory(): RawValue
 }
 

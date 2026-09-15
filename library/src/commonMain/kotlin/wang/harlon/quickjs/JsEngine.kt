@@ -119,11 +119,20 @@ class JsEngine(private val config: JsEngineConfig = JsEngineConfig()) : AutoClos
         }
     }
 
-    /** Diagnostics: how many refs are alive. Useful in tests to prove nothing leaked. */
+    /** Diagnostics: live refs and the engine's memory accounting. Useful in tests to prove nothing leaked. */
     fun stats(): JsEngineStats {
         checkOpen()
         val raw = native.stats()
-        return JsEngineStats(liveRefs = raw[0], refSlots = raw[1])
+        return JsEngineStats(
+            liveRefs = raw[0].toInt(),
+            refSlots = raw[1].toInt(),
+            memoryUsed = raw[2],
+            memoryLimit = raw[3],
+            objectCount = raw[4],
+            stringCount = raw[5],
+            atomCount = raw[6],
+            functionCount = raw[7],
+        )
     }
 
     /** The engine's own heap summary (`JS_DumpMemory`), one line per block type. Diagnostics only. */

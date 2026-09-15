@@ -164,10 +164,13 @@ internal actual class NativeEngine actual constructor(config: JsEngineConfig, in
         out.toRaw()
     }
 
-    actual fun stats(): IntArray = memScoped {
+    actual fun stats(): LongArray = memScoped {
         val st = alloc<kmpjs_stats>()
         kmpjs_get_stats(handle(), st.ptr)
-        intArrayOf(st.live_refs, st.ref_slots)
+        longArrayOf(
+            st.live_refs.toLong(), st.ref_slots.toLong(), st.memory_used, st.memory_limit,
+            st.object_count, st.string_count, st.atom_count, st.function_count,
+        )
     }
 
     actual fun dumpMemory(): RawValue = memScoped {

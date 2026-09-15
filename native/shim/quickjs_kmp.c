@@ -57,6 +57,7 @@ struct kmpjs_engine {
     kmpjs_log_fn log;
     kmpjs_rejection_fn rejection;
     size_t max_stack_size;
+    int64_t memory_limit; /* as configured; the engine stores "unlimited" as (size_t)-1, which differs per word size */
     JSClassID cls_array_buffer;
     JSClassID cls_shared_array_buffer;
     JSClassID cls_typed_array_first; /* Uint8ClampedArray .. Float64Array are contiguous */
@@ -592,12 +593,20 @@ void kmpjs_ref_release(kmpjs_engine *e, int64_t ref)
 
 void kmpjs_get_stats(kmpjs_engine *e, kmpjs_stats *stats)
 {
+    JSMemoryUsage usage;
     int32_t i, live = 0;
     /* refcount, not slots: a retained ref counts once per outstanding release */
     for (i = 0; i < e->slot_count; i++)
         live += e->slots[i].refcount;
     stats->live_refs = live;
     stats->ref_slots = e->slot_count;
+    JS_ComputeMemoryUsage(e->rt, &usage);
+    stats->memory_used = usage.malloc_size;
+    stats->memory_limit = e->memory_limit;
+    stats->object_count = usage.obj_count;
+    stats->string_count = usage.str_count;
+    stats->atom_count = usage.atom_count;
+    stats->function_count = usage.js_func_count;
 }
 
 void kmpjs_dump_memory(kmpjs_engine *e, kmpjs_value *out)
@@ -636,6 +645,7 @@ kmpjs_engine *kmpjs_create(const kmpjs_config *config, void *user, kmpjs_host_fn
     e->log = log;
     e->rejection = rejection;
     e->max_stack_size = (size_t)config->max_stack_size;
+    e->memory_limit = config->memory_limit > 0 ? config->memory_limit : 0;
     e->module_scheme = strdup(config->module_scheme && config->module_scheme[0] ? config->module_scheme : "kmp");
     e->rt = e->module_scheme ? JS_NewRuntime2(&kmp_malloc_funcs, e) : NULL;
     if (!e->rt) {

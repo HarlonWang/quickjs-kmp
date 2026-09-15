@@ -52,7 +52,7 @@ internal actual class NativeEngine actual constructor(config: JsEngineConfig, in
     actual fun evalModule(source: String, name: String, flags: Int): RawValue =
         result(NativeBridge.nativeEvalModule(ptr, Wtf8.encode(source), Wtf8.encode(name), flags))
 
-    actual fun stats(): IntArray = NativeBridge.nativeStats(ptr) ?: throw JsException("native call failed")
+    actual fun stats(): LongArray = NativeBridge.nativeStats(ptr) ?: throw JsException("native call failed")
 
     actual fun dumpMemory(): RawValue = result(NativeBridge.nativeDumpMemory(ptr))
 }
