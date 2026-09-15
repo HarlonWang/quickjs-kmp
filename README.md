@@ -7,7 +7,7 @@
 
 English | [中文](./README_ZH.md)
 
-> Not published yet. The public API mirrors [mquickjs-kmp](https://github.com/HarlonWang/mquickjs-kmp); see [docs/roadmap.md](docs/roadmap.md) for what is done and what is next. Built for [TinyUI](https://github.com/HarlonWang/tinyui) but not tied to it.
+> Not published yet. Successor of [mquickjs-kmp](https://github.com/HarlonWang/mquickjs-kmp) (archived); see [docs/roadmap.md](docs/roadmap.md) for what is done and what is next. Built for [TinyUI](https://github.com/HarlonWang/tinyui) but not tied to it.
 
 ## Platforms
 

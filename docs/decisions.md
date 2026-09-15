@@ -1,6 +1,6 @@
 # 决策记录
 
-只记「为什么这么定」，每条一段。改决策时更新对应条目，不追加叙事。起点是 mquickjs-kmp 的同名文档：凡未在此覆盖的条目（平台范围、版本基线、上游锁定方式、原生分发、BCV、只发正式版、Android host test 走宿主 JNI、ref 显式 close、对象过桥方式由调用点选择等）**原样沿用**；「JsRuntime 互斥来自 Mutex」沿用但有 QuickJS 特有的补充，见「取消 / 超时 / 线程」条。
+只记「为什么这么定」，每条一段。改决策时更新对应条目，不追加叙事。起点是 mquickjs-kmp 的同名文档：凡未在此覆盖的条目（平台范围、版本基线、上游锁定方式、原生分发、BCV、只发正式版、Android host test 走宿主 JNI、ref 显式 close、对象过桥方式由调用点选择等）**原样沿用**；「JsRuntime 互斥来自 Mutex」沿用但有 QuickJS 特有的补充，见「取消 / 超时 / 线程」条。mquickjs-kmp 已于 2026-09-15 归档，本仓是它的后继：沿用条目的真值从此在本仓，修复与决策都不再回流。
 
 ## 定位：QuickJS 的 KMP 绑定，为 TinyUI 服务，但不只为它
 
@@ -18,9 +18,9 @@ TinyUI（ADR-005）需要 ES2025 + 原生 ESM + 微任务 + 可预编译的引�
 
 `quickjs.c` / `libregexp.c` / `libunicode.c` / `cutils.c` / `dtoa.c` 五个文件；不要 `std` / `os` 模块、文件 IO、`qjs` 的 REPL。定时器、模块加载全部由宿主经 shim 提供——TinyUI 正是这么要的，通用用户也应如此（引擎不该自己碰文件系统）。引擎核心没有 `console` 对象也没有 `performance`（两者都在 libc 里），shim 自己挂 `console.log`（走 `JsEngineConfig.logger`）与 `performance.now`（单调时钟），这是 shim 的义务而非可选项：TinyUI 的 bench 与 mquickjs-kmp 的验收用例都依赖它们。`CONFIG_VERSION` 从上游 `VERSION` 文件读入编译宏。
 
-## Kotlin 公共 API 与 mquickjs-kmp 同形
+## Kotlin 公共 API 以 mquickjs-kmp 为起点，不再与之同形
 
-`JsEngine` / `JsRuntime` / `JsRef` / `JsValue` / `ObjectTransport` / `JsBytecode` / `JsProgram` / `registerFunction` / `stats` 等签名保持一致，mquickjs-kmp 的 commonTest 用例集直接搬来当验收。目的：TinyUI 对引擎的依赖面天然是同一组签名，将来抽引擎接口零成本；用户在两个 SDK 间迁移只改坐标。QuickJS 独有能力（模块、Promise 结果、内存限额）作为**新增**而非改形。同形只约束「形」，不约束 MicroQuickJS 的实现缺陷：凡是把 MicroQuickJS 的限制暴露成公共 API 的部分（字节码字长、每引擎一个程序、加载顺序）一律删除，对应用例作废或反转，清单见 roadmap.md 的验收基线。
+`JsEngine` / `JsRuntime` / `JsRef` / `JsValue` / `ObjectTransport` / `registerFunction` / `stats` 等签名从 mquickjs-kmp 搬来，它的 commonTest 用例集直接搬来当验收，这样骨架与用例零成本复用。mquickjs-kmp 归档后「两个 SDK 间迁移只改坐标」的目标不复存在，同形不再是约束：本仓 API 按 QuickJS 与 TinyUI 的需要独立演进，签名可以改形。已经落地的差异：`JsEngineConfig` 换成 `memoryLimit` / `maxStackSize` / `gcThreshold`；凡是把 MicroQuickJS 的限制暴露成公共 API 的部分（字节码字长、每引擎一个程序、加载顺序）一律删除，对应用例作废或反转，清单见 roadmap.md 的验收基线。
 
 ## 句柄表保留，内部存 dup 过的 JSValue
 

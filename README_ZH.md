@@ -7,7 +7,7 @@
 
 [English](./README.md) | 中文
 
-> 尚未发布。公共 API 与 [mquickjs-kmp](https://github.com/HarlonWang/mquickjs-kmp) 同形，已完成与后续计划见 [docs/roadmap.md](docs/roadmap.md)。为 [TinyUI](https://github.com/HarlonWang/tinyui) 而建，但不绑定它。
+> 尚未发布。[mquickjs-kmp](https://github.com/HarlonWang/mquickjs-kmp)（已归档）的后继，已完成与后续计划见 [docs/roadmap.md](docs/roadmap.md)。为 [TinyUI](https://github.com/HarlonWang/tinyui) 而建，但不绑定它。
 
 ## 平台
 

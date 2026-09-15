@@ -1,6 +1,6 @@
 # quickjs-kmp
 
-QuickJS 的 KMP 绑定 SDK，公共 API 与 mquickjs-kmp 同形。开始工作前先读 README.md，再按需读 docs/。
+QuickJS 的 KMP 绑定 SDK，mquickjs-kmp（已归档）的后继，代码与决策不再与它同步。开始工作前先读 README.md，再按需读 docs/。
 
 ## 结构
 
