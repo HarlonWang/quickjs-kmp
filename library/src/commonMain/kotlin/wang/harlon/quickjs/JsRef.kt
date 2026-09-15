@@ -1,0 +1,77 @@
+package wang.harlon.quickjs
+
+/**
+ * A live handle to a JS object, array or function owned by [engine]. The object stays alive in the
+ * engine's heap until [close]; leaking refs therefore leaks JS heap. Bound to the engine's
+ * threading rules like every other engine call.
+ *
+ * Refs received as host-function arguments are valid only for the duration of that call;
+ * call [retain] to keep one.
+ */
+class JsRef internal constructor(
+    internal val engine: JsEngine,
+    internal val id: Long,
+    kind: Int,
+) : JsValue, AutoCloseable {
+    val isFunction: Boolean = kind and NativeTag.REF_FUNCTION != 0
+    val isArray: Boolean = kind and NativeTag.REF_ARRAY != 0
+
+    private var closed = false
+
+    /** Host-function arguments: the engine releases them after the call, [close] only marks them unusable. */
+    internal var transient = false
+
+    /**
+     * Whether this handle is still usable; false after [close], after the engine is closed, or,
+     * for host-function arguments, after the call.
+     */
+    val isValid: Boolean
+        get() = !closed && engine.isOpen
+
+    fun get(name: String, objects: ObjectTransport = ObjectTransport.JSON): JsValue =
+        op { native.refGet(id, name, objects.flags) }
+
+    fun get(index: Int, objects: ObjectTransport = ObjectTransport.JSON): JsValue =
+        op { native.refGetIndex(id, index, objects.flags) }
+
+    fun set(name: String, value: JsValue) {
+        op { native.refSet(id, name, encode(value)) }
+    }
+
+    /** Calls this function with `this` undefined; objects come back as JSON. */
+    fun call(vararg args: JsValue): JsValue = invoke(null, args.toList())
+
+    fun invoke(
+        thisArg: JsRef?,
+        args: List<JsValue>,
+        objects: ObjectTransport = ObjectTransport.JSON,
+    ): JsValue = op {
+        thisArg?.let { checkOwned(it) }
+        native.refCall(id, thisArg?.id ?: 0L, args.map { encode(it) }, objects.flags)
+    }
+
+    /** `JSON.stringify` of the object, or null when it cannot be serialized. */
+    fun toJson(): String? = (op { native.refToJson(id) } as JsValue.Json).json
+
+    /** Keeps a transient host-function argument alive beyond the call; the returned ref must be closed. */
+    fun retain(): JsRef {
+        op { native.refRetain(id); null }
+        return JsRef(engine, id, (if (isFunction) NativeTag.REF_FUNCTION else 0) or (if (isArray) NativeTag.REF_ARRAY else 0))
+    }
+
+    override fun close() {
+        if (closed) return
+        closed = true
+        if (!transient) engine.releaseRef(id)
+    }
+
+    private fun op(block: JsEngine.() -> RawValue?): JsValue {
+        check(!closed) { "JsRef is closed" }
+        return engine.refOp(block)
+    }
+
+    override fun toString(): String = "JsRef(id=$id, function=$isFunction, array=$isArray)"
+}
+
+internal val ObjectTransport.flags: Int
+    get() = if (this == ObjectTransport.REF) NativeTag.FLAG_REF_OBJECTS else 0

@@ -1,0 +1,4 @@
+# bellard/quickjs pin. Vendored with `git subtree` at native/quickjs (see docs/native-build.md).
+repo=https://github.com/bellard/quickjs
+commit=04be246001599f5995fa2f2d8c91a0f198d3f34c
+date=2026-06-04

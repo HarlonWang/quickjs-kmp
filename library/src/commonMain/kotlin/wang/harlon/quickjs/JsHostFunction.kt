@@ -1,0 +1,6 @@
+package wang.harlon.quickjs
+
+/** A Kotlin function callable from JavaScript. Throwing propagates into JS as an `Error`. */
+fun interface JsHostFunction {
+    fun invoke(args: List<JsValue>): JsValue
+}

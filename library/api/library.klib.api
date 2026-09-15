@@ -1,0 +1,184 @@
+// Klib ABI Dump
+// Targets: [iosArm64, iosSimulatorArm64, macosArm64]
+// Rendering settings:
+// - Signature version: 2
+// - Show manifest properties: true
+// - Show declarations: true
+
+// Library unique name: <quickjs-kmp:library>
+final enum class wang.harlon.quickjs/ObjectTransport : kotlin/Enum<wang.harlon.quickjs/ObjectTransport> { // wang.harlon.quickjs/ObjectTransport|null[0]
+    enum entry JSON // wang.harlon.quickjs/ObjectTransport.JSON|null[0]
+    enum entry REF // wang.harlon.quickjs/ObjectTransport.REF|null[0]
+
+    final val entries // wang.harlon.quickjs/ObjectTransport.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<wang.harlon.quickjs/ObjectTransport> // wang.harlon.quickjs/ObjectTransport.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): wang.harlon.quickjs/ObjectTransport // wang.harlon.quickjs/ObjectTransport.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<wang.harlon.quickjs/ObjectTransport> // wang.harlon.quickjs/ObjectTransport.values|values#static(){}[0]
+}
+
+abstract fun interface wang.harlon.quickjs/JsHostFunction { // wang.harlon.quickjs/JsHostFunction|null[0]
+    abstract fun invoke(kotlin.collections/List<wang.harlon.quickjs/JsValue>): wang.harlon.quickjs/JsValue // wang.harlon.quickjs/JsHostFunction.invoke|invoke(kotlin.collections.List<wang.harlon.quickjs.JsValue>){}[0]
+}
+
+sealed interface wang.harlon.quickjs/JsValue { // wang.harlon.quickjs/JsValue|null[0]
+    final class Bool : wang.harlon.quickjs/JsValue { // wang.harlon.quickjs/JsValue.Bool|null[0]
+        constructor <init>(kotlin/Boolean) // wang.harlon.quickjs/JsValue.Bool.<init>|<init>(kotlin.Boolean){}[0]
+
+        final val value // wang.harlon.quickjs/JsValue.Bool.value|{}value[0]
+            final fun <get-value>(): kotlin/Boolean // wang.harlon.quickjs/JsValue.Bool.value.<get-value>|<get-value>(){}[0]
+
+        final fun component1(): kotlin/Boolean // wang.harlon.quickjs/JsValue.Bool.component1|component1(){}[0]
+        final fun copy(kotlin/Boolean = ...): wang.harlon.quickjs/JsValue.Bool // wang.harlon.quickjs/JsValue.Bool.copy|copy(kotlin.Boolean){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // wang.harlon.quickjs/JsValue.Bool.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // wang.harlon.quickjs/JsValue.Bool.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // wang.harlon.quickjs/JsValue.Bool.toString|toString(){}[0]
+    }
+
+    final class Json : wang.harlon.quickjs/JsValue { // wang.harlon.quickjs/JsValue.Json|null[0]
+        constructor <init>(kotlin/String?) // wang.harlon.quickjs/JsValue.Json.<init>|<init>(kotlin.String?){}[0]
+
+        final val json // wang.harlon.quickjs/JsValue.Json.json|{}json[0]
+            final fun <get-json>(): kotlin/String? // wang.harlon.quickjs/JsValue.Json.json.<get-json>|<get-json>(){}[0]
+
+        final fun component1(): kotlin/String? // wang.harlon.quickjs/JsValue.Json.component1|component1(){}[0]
+        final fun copy(kotlin/String? = ...): wang.harlon.quickjs/JsValue.Json // wang.harlon.quickjs/JsValue.Json.copy|copy(kotlin.String?){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // wang.harlon.quickjs/JsValue.Json.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // wang.harlon.quickjs/JsValue.Json.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // wang.harlon.quickjs/JsValue.Json.toString|toString(){}[0]
+    }
+
+    final class Num : wang.harlon.quickjs/JsValue { // wang.harlon.quickjs/JsValue.Num|null[0]
+        constructor <init>(kotlin/Double) // wang.harlon.quickjs/JsValue.Num.<init>|<init>(kotlin.Double){}[0]
+        constructor <init>(kotlin/Int) // wang.harlon.quickjs/JsValue.Num.<init>|<init>(kotlin.Int){}[0]
+
+        final val value // wang.harlon.quickjs/JsValue.Num.value|{}value[0]
+            final fun <get-value>(): kotlin/Double // wang.harlon.quickjs/JsValue.Num.value.<get-value>|<get-value>(){}[0]
+
+        final fun component1(): kotlin/Double // wang.harlon.quickjs/JsValue.Num.component1|component1(){}[0]
+        final fun copy(kotlin/Double = ...): wang.harlon.quickjs/JsValue.Num // wang.harlon.quickjs/JsValue.Num.copy|copy(kotlin.Double){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // wang.harlon.quickjs/JsValue.Num.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // wang.harlon.quickjs/JsValue.Num.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // wang.harlon.quickjs/JsValue.Num.toString|toString(){}[0]
+    }
+
+    final class Str : wang.harlon.quickjs/JsValue { // wang.harlon.quickjs/JsValue.Str|null[0]
+        constructor <init>(kotlin/String) // wang.harlon.quickjs/JsValue.Str.<init>|<init>(kotlin.String){}[0]
+
+        final val value // wang.harlon.quickjs/JsValue.Str.value|{}value[0]
+            final fun <get-value>(): kotlin/String // wang.harlon.quickjs/JsValue.Str.value.<get-value>|<get-value>(){}[0]
+
+        final fun component1(): kotlin/String // wang.harlon.quickjs/JsValue.Str.component1|component1(){}[0]
+        final fun copy(kotlin/String = ...): wang.harlon.quickjs/JsValue.Str // wang.harlon.quickjs/JsValue.Str.copy|copy(kotlin.String){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // wang.harlon.quickjs/JsValue.Str.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // wang.harlon.quickjs/JsValue.Str.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // wang.harlon.quickjs/JsValue.Str.toString|toString(){}[0]
+    }
+
+    final object Null : wang.harlon.quickjs/JsValue { // wang.harlon.quickjs/JsValue.Null|null[0]
+        final fun toString(): kotlin/String // wang.harlon.quickjs/JsValue.Null.toString|toString(){}[0]
+    }
+
+    final object Undefined : wang.harlon.quickjs/JsValue { // wang.harlon.quickjs/JsValue.Undefined|null[0]
+        final fun toString(): kotlin/String // wang.harlon.quickjs/JsValue.Undefined.toString|toString(){}[0]
+    }
+}
+
+final class wang.harlon.quickjs/JsEngine : kotlin/AutoCloseable { // wang.harlon.quickjs/JsEngine|null[0]
+    constructor <init>(wang.harlon.quickjs/JsEngineConfig = ...) // wang.harlon.quickjs/JsEngine.<init>|<init>(wang.harlon.quickjs.JsEngineConfig){}[0]
+
+    final fun close() // wang.harlon.quickjs/JsEngine.close|close(){}[0]
+    final fun dumpMemory(): kotlin/String // wang.harlon.quickjs/JsEngine.dumpMemory|dumpMemory(){}[0]
+    final fun evaluate(kotlin/String, kotlin/String = ..., wang.harlon.quickjs/ObjectTransport = ...): wang.harlon.quickjs/JsValue // wang.harlon.quickjs/JsEngine.evaluate|evaluate(kotlin.String;kotlin.String;wang.harlon.quickjs.ObjectTransport){}[0]
+    final fun interrupt() // wang.harlon.quickjs/JsEngine.interrupt|interrupt(){}[0]
+    final fun registerFunction(kotlin/String, wang.harlon.quickjs/ObjectTransport = ..., wang.harlon.quickjs/JsHostFunction) // wang.harlon.quickjs/JsEngine.registerFunction|registerFunction(kotlin.String;wang.harlon.quickjs.ObjectTransport;wang.harlon.quickjs.JsHostFunction){}[0]
+    final fun stats(): wang.harlon.quickjs/JsEngineStats // wang.harlon.quickjs/JsEngine.stats|stats(){}[0]
+}
+
+final class wang.harlon.quickjs/JsEngineConfig { // wang.harlon.quickjs/JsEngineConfig|null[0]
+    constructor <init>(kotlin/Long = ..., kotlin/Long = ..., kotlin/Long = ..., kotlin/Function1<kotlin/String, kotlin/Unit>? = ...) // wang.harlon.quickjs/JsEngineConfig.<init>|<init>(kotlin.Long;kotlin.Long;kotlin.Long;kotlin.Function1<kotlin.String,kotlin.Unit>?){}[0]
+
+    final val gcThreshold // wang.harlon.quickjs/JsEngineConfig.gcThreshold|{}gcThreshold[0]
+        final fun <get-gcThreshold>(): kotlin/Long // wang.harlon.quickjs/JsEngineConfig.gcThreshold.<get-gcThreshold>|<get-gcThreshold>(){}[0]
+    final val logger // wang.harlon.quickjs/JsEngineConfig.logger|{}logger[0]
+        final fun <get-logger>(): kotlin/Function1<kotlin/String, kotlin/Unit>? // wang.harlon.quickjs/JsEngineConfig.logger.<get-logger>|<get-logger>(){}[0]
+    final val maxStackSize // wang.harlon.quickjs/JsEngineConfig.maxStackSize|{}maxStackSize[0]
+        final fun <get-maxStackSize>(): kotlin/Long // wang.harlon.quickjs/JsEngineConfig.maxStackSize.<get-maxStackSize>|<get-maxStackSize>(){}[0]
+    final val memoryLimit // wang.harlon.quickjs/JsEngineConfig.memoryLimit|{}memoryLimit[0]
+        final fun <get-memoryLimit>(): kotlin/Long // wang.harlon.quickjs/JsEngineConfig.memoryLimit.<get-memoryLimit>|<get-memoryLimit>(){}[0]
+
+    final object Companion { // wang.harlon.quickjs/JsEngineConfig.Companion|null[0]
+        final const val DEFAULT_MAX_STACK_SIZE // wang.harlon.quickjs/JsEngineConfig.Companion.DEFAULT_MAX_STACK_SIZE|{}DEFAULT_MAX_STACK_SIZE[0]
+            final fun <get-DEFAULT_MAX_STACK_SIZE>(): kotlin/Long // wang.harlon.quickjs/JsEngineConfig.Companion.DEFAULT_MAX_STACK_SIZE.<get-DEFAULT_MAX_STACK_SIZE>|<get-DEFAULT_MAX_STACK_SIZE>(){}[0]
+    }
+}
+
+final class wang.harlon.quickjs/JsEngineStats { // wang.harlon.quickjs/JsEngineStats|null[0]
+    constructor <init>(kotlin/Int, kotlin/Int) // wang.harlon.quickjs/JsEngineStats.<init>|<init>(kotlin.Int;kotlin.Int){}[0]
+
+    final val liveRefs // wang.harlon.quickjs/JsEngineStats.liveRefs|{}liveRefs[0]
+        final fun <get-liveRefs>(): kotlin/Int // wang.harlon.quickjs/JsEngineStats.liveRefs.<get-liveRefs>|<get-liveRefs>(){}[0]
+    final val refSlots // wang.harlon.quickjs/JsEngineStats.refSlots|{}refSlots[0]
+        final fun <get-refSlots>(): kotlin/Int // wang.harlon.quickjs/JsEngineStats.refSlots.<get-refSlots>|<get-refSlots>(){}[0]
+
+    final fun toString(): kotlin/String // wang.harlon.quickjs/JsEngineStats.toString|toString(){}[0]
+}
+
+final class wang.harlon.quickjs/JsException : kotlin/RuntimeException { // wang.harlon.quickjs/JsException|null[0]
+    constructor <init>(kotlin/String, kotlin/String? = ...) // wang.harlon.quickjs/JsException.<init>|<init>(kotlin.String;kotlin.String?){}[0]
+
+    final val jsStack // wang.harlon.quickjs/JsException.jsStack|{}jsStack[0]
+        final fun <get-jsStack>(): kotlin/String? // wang.harlon.quickjs/JsException.jsStack.<get-jsStack>|<get-jsStack>(){}[0]
+}
+
+final class wang.harlon.quickjs/JsRef : kotlin/AutoCloseable, wang.harlon.quickjs/JsValue { // wang.harlon.quickjs/JsRef|null[0]
+    final val isArray // wang.harlon.quickjs/JsRef.isArray|{}isArray[0]
+        final fun <get-isArray>(): kotlin/Boolean // wang.harlon.quickjs/JsRef.isArray.<get-isArray>|<get-isArray>(){}[0]
+    final val isFunction // wang.harlon.quickjs/JsRef.isFunction|{}isFunction[0]
+        final fun <get-isFunction>(): kotlin/Boolean // wang.harlon.quickjs/JsRef.isFunction.<get-isFunction>|<get-isFunction>(){}[0]
+    final val isValid // wang.harlon.quickjs/JsRef.isValid|{}isValid[0]
+        final fun <get-isValid>(): kotlin/Boolean // wang.harlon.quickjs/JsRef.isValid.<get-isValid>|<get-isValid>(){}[0]
+
+    final fun call(kotlin/Array<out wang.harlon.quickjs/JsValue>...): wang.harlon.quickjs/JsValue // wang.harlon.quickjs/JsRef.call|call(kotlin.Array<out|wang.harlon.quickjs.JsValue>...){}[0]
+    final fun close() // wang.harlon.quickjs/JsRef.close|close(){}[0]
+    final fun get(kotlin/Int, wang.harlon.quickjs/ObjectTransport = ...): wang.harlon.quickjs/JsValue // wang.harlon.quickjs/JsRef.get|get(kotlin.Int;wang.harlon.quickjs.ObjectTransport){}[0]
+    final fun get(kotlin/String, wang.harlon.quickjs/ObjectTransport = ...): wang.harlon.quickjs/JsValue // wang.harlon.quickjs/JsRef.get|get(kotlin.String;wang.harlon.quickjs.ObjectTransport){}[0]
+    final fun invoke(wang.harlon.quickjs/JsRef?, kotlin.collections/List<wang.harlon.quickjs/JsValue>, wang.harlon.quickjs/ObjectTransport = ...): wang.harlon.quickjs/JsValue // wang.harlon.quickjs/JsRef.invoke|invoke(wang.harlon.quickjs.JsRef?;kotlin.collections.List<wang.harlon.quickjs.JsValue>;wang.harlon.quickjs.ObjectTransport){}[0]
+    final fun retain(): wang.harlon.quickjs/JsRef // wang.harlon.quickjs/JsRef.retain|retain(){}[0]
+    final fun set(kotlin/String, wang.harlon.quickjs/JsValue) // wang.harlon.quickjs/JsRef.set|set(kotlin.String;wang.harlon.quickjs.JsValue){}[0]
+    final fun toJson(): kotlin/String? // wang.harlon.quickjs/JsRef.toJson|toJson(){}[0]
+    final fun toString(): kotlin/String // wang.harlon.quickjs/JsRef.toString|toString(){}[0]
+}
+
+final class wang.harlon.quickjs/JsRuntime : kotlin/AutoCloseable { // wang.harlon.quickjs/JsRuntime|null[0]
+    constructor <init>(wang.harlon.quickjs/JsEngineConfig = ..., kotlinx.coroutines/CoroutineDispatcher = ...) // wang.harlon.quickjs/JsRuntime.<init>|<init>(wang.harlon.quickjs.JsEngineConfig;kotlinx.coroutines.CoroutineDispatcher){}[0]
+
+    final fun close() // wang.harlon.quickjs/JsRuntime.close|close(){}[0]
+    final suspend fun <#A1: kotlin/Any?> withEngine(kotlin/Function1<wang.harlon.quickjs/JsEngine, #A1>): #A1 // wang.harlon.quickjs/JsRuntime.withEngine|withEngine(kotlin.Function1<wang.harlon.quickjs.JsEngine,0:0>){0§<kotlin.Any?>}[0]
+    final suspend fun evaluate(kotlin/String, kotlin/String = ..., wang.harlon.quickjs/ObjectTransport = ..., kotlin.time/Duration? = ...): wang.harlon.quickjs/JsValue // wang.harlon.quickjs/JsRuntime.evaluate|evaluate(kotlin.String;kotlin.String;wang.harlon.quickjs.ObjectTransport;kotlin.time.Duration?){}[0]
+    final suspend fun registerFunction(kotlin/String, wang.harlon.quickjs/ObjectTransport = ..., wang.harlon.quickjs/JsHostFunction) // wang.harlon.quickjs/JsRuntime.registerFunction|registerFunction(kotlin.String;wang.harlon.quickjs.ObjectTransport;wang.harlon.quickjs.JsHostFunction){}[0]
+    final suspend fun shutdown() // wang.harlon.quickjs/JsRuntime.shutdown|shutdown(){}[0]
+}
+
+final object wang.harlon.quickjs/QuickJs { // wang.harlon.quickjs/QuickJs|null[0]
+    final val sdkVersion // wang.harlon.quickjs/QuickJs.sdkVersion|{}sdkVersion[0]
+        final fun <get-sdkVersion>(): kotlin/String // wang.harlon.quickjs/QuickJs.sdkVersion.<get-sdkVersion>|<get-sdkVersion>(){}[0]
+    final val upstreamCommit // wang.harlon.quickjs/QuickJs.upstreamCommit|{}upstreamCommit[0]
+        final fun <get-upstreamCommit>(): kotlin/String // wang.harlon.quickjs/QuickJs.upstreamCommit.<get-upstreamCommit>|<get-upstreamCommit>(){}[0]
+}
+
+final fun <#A: kotlin/Any?> (kotlinx.serialization.json/Json).wang.harlon.quickjs/decodeFromJsValue(kotlinx.serialization/DeserializationStrategy<#A>, wang.harlon.quickjs/JsValue): #A // wang.harlon.quickjs/decodeFromJsValue|decodeFromJsValue@kotlinx.serialization.json.Json(kotlinx.serialization.DeserializationStrategy<0:0>;wang.harlon.quickjs.JsValue){0§<kotlin.Any?>}[0]
+final fun <#A: kotlin/Any?> (kotlinx.serialization.json/Json).wang.harlon.quickjs/encodeToJsValue(kotlinx.serialization/SerializationStrategy<#A>, #A): wang.harlon.quickjs/JsValue // wang.harlon.quickjs/encodeToJsValue|encodeToJsValue@kotlinx.serialization.json.Json(kotlinx.serialization.SerializationStrategy<0:0>;0:0){0§<kotlin.Any?>}[0]
+final inline fun <#A: reified kotlin/Any?, #B: reified kotlin/Any?, #C: reified kotlin/Any?, #D: reified kotlin/Any?> (wang.harlon.quickjs/JsEngine).wang.harlon.quickjs/registerFunction(kotlin/String, kotlinx.serialization.json/Json = ..., crossinline kotlin/Function3<#A, #B, #C, #D>) // wang.harlon.quickjs/registerFunction|registerFunction@wang.harlon.quickjs.JsEngine(kotlin.String;kotlinx.serialization.json.Json;kotlin.Function3<0:0,0:1,0:2,0:3>){0§<kotlin.Any?>;1§<kotlin.Any?>;2§<kotlin.Any?>;3§<kotlin.Any?>}[0]
+final inline fun <#A: reified kotlin/Any?, #B: reified kotlin/Any?, #C: reified kotlin/Any?> (wang.harlon.quickjs/JsEngine).wang.harlon.quickjs/registerFunction(kotlin/String, kotlinx.serialization.json/Json = ..., crossinline kotlin/Function2<#A, #B, #C>) // wang.harlon.quickjs/registerFunction|registerFunction@wang.harlon.quickjs.JsEngine(kotlin.String;kotlinx.serialization.json.Json;kotlin.Function2<0:0,0:1,0:2>){0§<kotlin.Any?>;1§<kotlin.Any?>;2§<kotlin.Any?>}[0]
+final inline fun <#A: reified kotlin/Any?, #B: reified kotlin/Any?> (wang.harlon.quickjs/JsEngine).wang.harlon.quickjs/registerFunction(kotlin/String, kotlinx.serialization.json/Json = ..., crossinline kotlin/Function1<#A, #B>) // wang.harlon.quickjs/registerFunction|registerFunction@wang.harlon.quickjs.JsEngine(kotlin.String;kotlinx.serialization.json.Json;kotlin.Function1<0:0,0:1>){0§<kotlin.Any?>;1§<kotlin.Any?>}[0]
+final inline fun <#A: reified kotlin/Any?> (kotlinx.serialization.json/Json).wang.harlon.quickjs/argument(kotlin.collections/List<wang.harlon.quickjs/JsValue>, kotlin/Int): #A // wang.harlon.quickjs/argument|argument@kotlinx.serialization.json.Json(kotlin.collections.List<wang.harlon.quickjs.JsValue>;kotlin.Int){0§<kotlin.Any?>}[0]
+final inline fun <#A: reified kotlin/Any?> (kotlinx.serialization.json/Json).wang.harlon.quickjs/decodeFromJsValue(wang.harlon.quickjs/JsValue): #A // wang.harlon.quickjs/decodeFromJsValue|decodeFromJsValue@kotlinx.serialization.json.Json(wang.harlon.quickjs.JsValue){0§<kotlin.Any?>}[0]
+final inline fun <#A: reified kotlin/Any?> (kotlinx.serialization.json/Json).wang.harlon.quickjs/encodeResult(#A): wang.harlon.quickjs/JsValue // wang.harlon.quickjs/encodeResult|encodeResult@kotlinx.serialization.json.Json(0:0){0§<kotlin.Any?>}[0]
+final inline fun <#A: reified kotlin/Any?> (kotlinx.serialization.json/Json).wang.harlon.quickjs/encodeToJsValue(#A): wang.harlon.quickjs/JsValue // wang.harlon.quickjs/encodeToJsValue|encodeToJsValue@kotlinx.serialization.json.Json(0:0){0§<kotlin.Any?>}[0]
+final inline fun <#A: reified kotlin/Any?> (wang.harlon.quickjs/JsEngine).wang.harlon.quickjs/evaluateAs(kotlin/String, kotlin/String = ..., kotlinx.serialization.json/Json = ...): #A // wang.harlon.quickjs/evaluateAs|evaluateAs@wang.harlon.quickjs.JsEngine(kotlin.String;kotlin.String;kotlinx.serialization.json.Json){0§<kotlin.Any?>}[0]
+final inline fun <#A: reified kotlin/Any?> (wang.harlon.quickjs/JsValue).wang.harlon.quickjs/decode(kotlinx.serialization.json/Json = ...): #A // wang.harlon.quickjs/decode|decode@wang.harlon.quickjs.JsValue(kotlinx.serialization.json.Json){0§<kotlin.Any?>}[0]
+final suspend inline fun <#A: reified kotlin/Any?, #B: reified kotlin/Any?, #C: reified kotlin/Any?, #D: reified kotlin/Any?> (wang.harlon.quickjs/JsRuntime).wang.harlon.quickjs/registerFunction(kotlin/String, kotlinx.serialization.json/Json = ..., crossinline kotlin/Function3<#A, #B, #C, #D>) // wang.harlon.quickjs/registerFunction|registerFunction@wang.harlon.quickjs.JsRuntime(kotlin.String;kotlinx.serialization.json.Json;kotlin.Function3<0:0,0:1,0:2,0:3>){0§<kotlin.Any?>;1§<kotlin.Any?>;2§<kotlin.Any?>;3§<kotlin.Any?>}[0]
+final suspend inline fun <#A: reified kotlin/Any?, #B: reified kotlin/Any?, #C: reified kotlin/Any?> (wang.harlon.quickjs/JsRuntime).wang.harlon.quickjs/registerFunction(kotlin/String, kotlinx.serialization.json/Json = ..., crossinline kotlin/Function2<#A, #B, #C>) // wang.harlon.quickjs/registerFunction|registerFunction@wang.harlon.quickjs.JsRuntime(kotlin.String;kotlinx.serialization.json.Json;kotlin.Function2<0:0,0:1,0:2>){0§<kotlin.Any?>;1§<kotlin.Any?>;2§<kotlin.Any?>}[0]
+final suspend inline fun <#A: reified kotlin/Any?, #B: reified kotlin/Any?> (wang.harlon.quickjs/JsRuntime).wang.harlon.quickjs/registerFunction(kotlin/String, kotlinx.serialization.json/Json = ..., crossinline kotlin/Function1<#A, #B>) // wang.harlon.quickjs/registerFunction|registerFunction@wang.harlon.quickjs.JsRuntime(kotlin.String;kotlinx.serialization.json.Json;kotlin.Function1<0:0,0:1>){0§<kotlin.Any?>;1§<kotlin.Any?>}[0]
+final suspend inline fun <#A: reified kotlin/Any?> (wang.harlon.quickjs/JsRuntime).wang.harlon.quickjs/evaluateAs(kotlin/String, kotlin/String = ..., kotlin.time/Duration? = ..., kotlinx.serialization.json/Json = ...): #A // wang.harlon.quickjs/evaluateAs|evaluateAs@wang.harlon.quickjs.JsRuntime(kotlin.String;kotlin.String;kotlin.time.Duration?;kotlinx.serialization.json.Json){0§<kotlin.Any?>}[0]

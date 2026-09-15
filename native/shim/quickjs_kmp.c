@@ -1,0 +1,866 @@
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#include <stdatomic.h>
+#include <math.h>
+#include <time.h>
+#if defined(__APPLE__)
+#include <malloc/malloc.h>
+#else
+#include <malloc.h>
+#endif
+
+#include "quickjs.h"
+#include "quickjs_kmp.h"
+
+#ifndef KMPJS_UPSTREAM_COMMIT
+#error "KMPJS_UPSTREAM_COMMIT must be defined (CMake reads it from native/UPSTREAM)"
+#endif
+
+enum { KMP_IDLE = 0, KMP_RUNNING = 1, KMP_INTERRUPTED = 2 };
+
+typedef struct {
+    char *data;
+    int32_t len;
+    int32_t cap;
+} kmp_buf;
+
+/* One slot per live ref, holding a dup'ed JSValue. A ref handle packs the slot index
+   (low 32 bits) with a 32-bit generation (high bits) so a stale handle whose slot was
+   reused is rejected instead of touching another object. */
+typedef struct {
+    JSValue val;
+    int32_t refcount;
+    int32_t next_free;
+    uint32_t gen;
+} kmp_slot;
+
+struct kmpjs_engine {
+    JSRuntime *rt;
+    JSContext *ctx;
+    void *user;
+    kmpjs_host_fn host;
+    kmpjs_log_fn log;
+    atomic_int state; /* KMP_IDLE / KMP_RUNNING / KMP_INTERRUPTED */
+    int oom;          /* an allocation was refused by the memory limit since the last reset */
+    kmp_buf out_str;
+    kmp_buf out_stack;
+    kmp_buf log_line;
+    kmp_slot *slots;
+    int32_t slot_count;
+    int32_t slot_cap;
+    int32_t free_head; /* index of first free slot or -1 */
+};
+
+static void buf_reset(kmp_buf *b)
+{
+    b->len = 0;
+}
+
+static int buf_append(kmp_buf *b, const void *p, size_t n)
+{
+    if ((size_t)b->cap - b->len < n) {
+        size_t cap = b->cap ? b->cap : 64;
+        char *data;
+        while (cap - b->len < n)
+            cap *= 2;
+        data = realloc(b->data, cap);
+        if (!data)
+            return -1;
+        b->data = data;
+        b->cap = (int32_t)cap;
+    }
+    memcpy(b->data + b->len, p, n);
+    b->len += (int32_t)n;
+    return 0;
+}
+
+static void buf_free(kmp_buf *b)
+{
+    free(b->data);
+    b->data = NULL;
+    b->len = b->cap = 0;
+}
+
+static void publish(kmp_buf *b, const char **pstr, int32_t *plen)
+{
+    *pstr = b->data ? b->data : "";
+    *plen = b->len;
+}
+
+char *kmpjs_alloc(int32_t len)
+{
+    return malloc(len > 0 ? (size_t)len : 1);
+}
+
+void kmpjs_free(void *p)
+{
+    free(p);
+}
+
+int32_t kmpjs_abi_version(void)
+{
+    return KMPJS_ABI_VERSION;
+}
+
+/* ---- allocator: the engine's default one plus a flag for refused allocations ----
+   At the limit QuickJS cannot even build the "out of memory" Error and throws null instead;
+   the flag lets exception_to_out tell that null apart from a script's own `throw null`. */
+
+#if defined(__APPLE__)
+#define KMP_MALLOC_OVERHEAD 0
+#else
+#define KMP_MALLOC_OVERHEAD 8
+#endif
+
+static size_t kmp_malloc_usable_size(const void *ptr)
+{
+#if defined(__APPLE__)
+    return malloc_size(ptr);
+#else
+    return malloc_usable_size((void *)ptr);
+#endif
+}
+
+static void *kmp_malloc(JSMallocState *s, size_t size)
+{
+    void *ptr;
+    if (s->malloc_size + size > s->malloc_limit) {
+        ((kmpjs_engine *)s->opaque)->oom = 1;
+        return NULL;
+    }
+    ptr = malloc(size);
+    if (!ptr)
+        return NULL;
+    s->malloc_count++;
+    s->malloc_size += kmp_malloc_usable_size(ptr) + KMP_MALLOC_OVERHEAD;
+    return ptr;
+}
+
+static void kmp_free(JSMallocState *s, void *ptr)
+{
+    if (!ptr)
+        return;
+    s->malloc_count--;
+    s->malloc_size -= kmp_malloc_usable_size(ptr) + KMP_MALLOC_OVERHEAD;
+    free(ptr);
+}
+
+static void *kmp_realloc(JSMallocState *s, void *ptr, size_t size)
+{
+    size_t old_size;
+    if (!ptr) {
+        if (size == 0)
+            return NULL;
+        return kmp_malloc(s, size);
+    }
+    old_size = kmp_malloc_usable_size(ptr);
+    if (size == 0) {
+        s->malloc_count--;
+        s->malloc_size -= old_size + KMP_MALLOC_OVERHEAD;
+        free(ptr);
+        return NULL;
+    }
+    if (s->malloc_size + size - old_size > s->malloc_limit) {
+        ((kmpjs_engine *)s->opaque)->oom = 1;
+        return NULL;
+    }
+    ptr = realloc(ptr, size);
+    if (!ptr)
+        return NULL;
+    s->malloc_size += kmp_malloc_usable_size(ptr) - old_size;
+    return ptr;
+}
+
+static const JSMallocFunctions kmp_malloc_funcs = { kmp_malloc, kmp_free, kmp_realloc, kmp_malloc_usable_size };
+
+/* ---- globals the engine core does not provide: console.log / print / performance.now ---- */
+
+static void print_write(void *opaque, const char *buf, size_t len)
+{
+    buf_append((kmp_buf *)opaque, buf, len);
+}
+
+static JSValue js_print(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    kmpjs_engine *e = JS_GetContextOpaque(ctx);
+    int i;
+
+    buf_reset(&e->log_line);
+    for (i = 0; i < argc; i++) {
+        if (i != 0)
+            buf_append(&e->log_line, " ", 1);
+        if (JS_IsString(argv[i])) {
+            size_t len;
+            const char *p = JS_ToCStringLen(ctx, &len, argv[i]);
+            if (!p)
+                return JS_EXCEPTION;
+            buf_append(&e->log_line, p, len);
+            JS_FreeCString(ctx, p);
+        } else {
+            JSPrintValueOptions opts;
+            JS_PrintValueSetDefaultOptions(&opts);
+            JS_PrintValue(ctx, print_write, &e->log_line, argv[i], &opts);
+        }
+    }
+    if (e->log)
+        e->log(e->user, e->log_line.data ? e->log_line.data : "", e->log_line.len);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_performance_now(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return JS_NewFloat64(ctx, (double)ts.tv_sec * 1e3 + (double)ts.tv_nsec / 1e6);
+}
+
+static int install_globals(JSContext *ctx)
+{
+    JSValue global = JS_GetGlobalObject(ctx);
+    JSValue console = JS_NewObject(ctx);
+    JSValue performance = JS_NewObject(ctx);
+    int rc = -1;
+
+    if (JS_IsException(console) || JS_IsException(performance))
+        goto done;
+    if (JS_SetPropertyStr(ctx, console, "log", JS_NewCFunction(ctx, js_print, "log", 1)) < 0)
+        goto done;
+    if (JS_SetPropertyStr(ctx, performance, "now", JS_NewCFunction(ctx, js_performance_now, "now", 0)) < 0)
+        goto done;
+    if (JS_SetPropertyStr(ctx, global, "print", JS_NewCFunction(ctx, js_print, "print", 1)) < 0)
+        goto done;
+    if (JS_SetPropertyStr(ctx, global, "console", console) < 0) {
+        console = JS_UNDEFINED;
+        goto done;
+    }
+    console = JS_UNDEFINED;
+    if (JS_SetPropertyStr(ctx, global, "performance", performance) < 0) {
+        performance = JS_UNDEFINED;
+        goto done;
+    }
+    performance = JS_UNDEFINED;
+    rc = 0;
+done:
+    JS_FreeValue(ctx, console);
+    JS_FreeValue(ctx, performance);
+    JS_FreeValue(ctx, global);
+    return rc;
+}
+
+/* ---- interrupt state ---- */
+
+static int kmp_interrupt_handler(JSRuntime *rt, void *opaque)
+{
+    kmpjs_engine *e = opaque;
+    return atomic_load_explicit(&e->state, memory_order_relaxed) == KMP_INTERRUPTED;
+}
+
+void kmpjs_interrupt(kmpjs_engine *e)
+{
+    int expected = KMP_RUNNING;
+    atomic_compare_exchange_strong(&e->state, &expected, KMP_INTERRUPTED);
+}
+
+/* Nested runs (a host function calling back into the engine) keep the outer state so an
+   interrupt is never lost; only the outermost run returns the engine to idle. The stack
+   limit is measured from the entering thread's stack, so it is refreshed on every outermost
+   entry: the runtime only records it once at creation (JS_UpdateStackTop). */
+static int run_begin(kmpjs_engine *e)
+{
+    int expected = KMP_IDLE;
+    int outermost = atomic_compare_exchange_strong(&e->state, &expected, KMP_RUNNING);
+    if (outermost) {
+        JS_UpdateStackTop(e->rt);
+        e->oom = 0;
+    }
+    return outermost;
+}
+
+static void run_end(kmpjs_engine *e, int outermost)
+{
+    if (outermost)
+        atomic_store(&e->state, KMP_IDLE);
+}
+
+/* ---- ref table ---- */
+
+static int64_t slot_handle(int32_t idx, uint32_t gen)
+{
+    return (int64_t)(((uint64_t)gen << 32) | (uint32_t)(idx + 1));
+}
+
+static int32_t slot_index(int64_t ref)
+{
+    return (int32_t)((uint64_t)ref & 0xFFFFFFFFu) - 1;
+}
+
+static kmp_slot *slot_get(kmpjs_engine *e, int64_t ref)
+{
+    kmp_slot *s;
+    int32_t idx = slot_index(ref);
+    uint32_t gen = (uint32_t)((uint64_t)ref >> 32);
+    if (ref <= 0 || idx < 0 || idx >= e->slot_count)
+        return NULL;
+    s = &e->slots[idx];
+    return (s->refcount > 0 && s->gen == gen) ? s : NULL;
+}
+
+/* Takes ownership of v; frees it and returns 0 when no slot can be allocated. */
+static int64_t slot_new(kmpjs_engine *e, JSValue v)
+{
+    kmp_slot *s;
+    int32_t idx;
+
+    if (e->free_head >= 0) {
+        idx = e->free_head;
+        s = &e->slots[idx];
+        e->free_head = s->next_free;
+    } else {
+        if (e->slot_count == INT32_MAX) {
+            JS_FreeValue(e->ctx, v);
+            return 0;
+        }
+        if (e->slot_count == e->slot_cap) {
+            int32_t cap = e->slot_cap ? e->slot_cap * 2 : 16;
+            kmp_slot *slots = realloc(e->slots, (size_t)cap * sizeof(*slots));
+            if (!slots) {
+                JS_FreeValue(e->ctx, v);
+                return 0;
+            }
+            e->slots = slots;
+            e->slot_cap = cap;
+        }
+        idx = e->slot_count++;
+        s = &e->slots[idx];
+        memset(s, 0, sizeof(*s));
+    }
+    s->val = v;
+    s->refcount = 1;
+    s->next_free = -1;
+    return slot_handle(idx, s->gen);
+}
+
+static void slot_free(kmpjs_engine *e, int64_t ref)
+{
+    int32_t idx = slot_index(ref);
+    kmp_slot *s = &e->slots[idx];
+    JS_FreeValue(e->ctx, s->val);
+    s->val = JS_UNDEFINED;
+    s->refcount = 0;
+    s->gen++;
+    s->next_free = e->free_head;
+    e->free_head = idx;
+}
+
+void kmpjs_ref_retain(kmpjs_engine *e, int64_t ref)
+{
+    kmp_slot *s = slot_get(e, ref);
+    if (s)
+        s->refcount++;
+}
+
+void kmpjs_ref_release(kmpjs_engine *e, int64_t ref)
+{
+    kmp_slot *s = slot_get(e, ref);
+    if (s && --s->refcount == 0)
+        slot_free(e, ref);
+}
+
+void kmpjs_get_stats(kmpjs_engine *e, kmpjs_stats *stats)
+{
+    int32_t i, live = 0;
+    /* refcount, not slots: a retained ref counts once per outstanding release */
+    for (i = 0; i < e->slot_count; i++)
+        live += e->slots[i].refcount;
+    stats->live_refs = live;
+    stats->ref_slots = e->slot_count;
+}
+
+void kmpjs_dump_memory(kmpjs_engine *e, kmpjs_value *out)
+{
+    JSMemoryUsage usage;
+    char *data = NULL;
+    size_t size = 0;
+    FILE *fp;
+
+    JS_ComputeMemoryUsage(e->rt, &usage);
+    buf_reset(&e->out_str);
+    fp = open_memstream(&data, &size);
+    if (fp) {
+        JS_DumpMemoryUsage(fp, &usage, e->rt);
+        fclose(fp);
+        buf_append(&e->out_str, data, size);
+        free(data);
+    }
+    memset(out, 0, sizeof(*out));
+    out->tag = KMPJS_TAG_STRING;
+    publish(&e->out_str, &out->str, &out->str_len);
+}
+
+/* ---- engine lifecycle ---- */
+
+kmpjs_engine *kmpjs_create(const kmpjs_config *config, void *user, kmpjs_host_fn host, kmpjs_log_fn log)
+{
+    kmpjs_engine *e = calloc(1, sizeof(*e));
+    if (!e)
+        return NULL;
+    atomic_init(&e->state, KMP_IDLE);
+    e->free_head = -1;
+    e->user = user;
+    e->host = host;
+    e->log = log;
+    e->rt = JS_NewRuntime2(&kmp_malloc_funcs, e);
+    if (!e->rt) {
+        free(e);
+        return NULL;
+    }
+    if (config->memory_limit > 0)
+        JS_SetMemoryLimit(e->rt, (size_t)config->memory_limit);
+    JS_SetMaxStackSize(e->rt, (size_t)config->max_stack_size);
+    if (config->gc_threshold > 0)
+        JS_SetGCThreshold(e->rt, (size_t)config->gc_threshold);
+    JS_SetRuntimeOpaque(e->rt, e);
+    JS_SetInterruptHandler(e->rt, kmp_interrupt_handler, e);
+    e->ctx = JS_NewContext(e->rt);
+    if (!e->ctx) {
+        JS_FreeRuntime(e->rt);
+        free(e);
+        return NULL;
+    }
+    JS_SetContextOpaque(e->ctx, e);
+    if (install_globals(e->ctx)) {
+        JS_FreeContext(e->ctx);
+        JS_FreeRuntime(e->rt);
+        free(e);
+        return NULL;
+    }
+    return e;
+}
+
+/* JS_FreeRuntime asserts that nothing is left alive, so every JSValue the shim holds goes first. */
+void kmpjs_destroy(kmpjs_engine *e)
+{
+    int32_t i;
+    if (!e)
+        return;
+    for (i = 0; i < e->slot_count; i++) {
+        if (e->slots[i].refcount > 0)
+            JS_FreeValue(e->ctx, e->slots[i].val);
+    }
+    free(e->slots);
+    JS_FreeContext(e->ctx);
+    JS_FreeRuntime(e->rt);
+    buf_free(&e->out_str);
+    buf_free(&e->out_stack);
+    buf_free(&e->log_line);
+    free(e);
+}
+
+void *kmpjs_get_user(kmpjs_engine *e)
+{
+    return e->user;
+}
+
+/* ---- value conversion ---- */
+
+static int copy_js_string(JSContext *ctx, JSValueConst str, kmp_buf *b)
+{
+    size_t len;
+    int rc;
+    const char *p = JS_ToCStringLen(ctx, &len, str);
+    if (!p)
+        return -1;
+    buf_reset(b);
+    rc = buf_append(b, p, len);
+    JS_FreeCString(ctx, p);
+    return rc;
+}
+
+static int object_kind(JSContext *ctx, JSValueConst v)
+{
+    int kind = 0;
+    if (JS_IsFunction(ctx, v))
+        kind |= KMPJS_REF_FUNCTION;
+    if (JS_IsArray(ctx, v) > 0)
+        kind |= KMPJS_REF_ARRAY;
+    return kind;
+}
+
+/* Converts a borrowed JS value. Returns -1 with the exception left pending in ctx. */
+static int value_to_out(kmpjs_engine *e, JSValueConst v, kmp_buf *sbuf, int32_t flags, kmpjs_value *out)
+{
+    JSContext *ctx = e->ctx;
+
+    memset(out, 0, sizeof(*out));
+    if (JS_IsUndefined(v)) {
+        out->tag = KMPJS_TAG_UNDEFINED;
+    } else if (JS_IsNull(v)) {
+        out->tag = KMPJS_TAG_NULL;
+    } else if (JS_IsBool(v)) {
+        out->tag = KMPJS_TAG_BOOL;
+        out->num = JS_ToBool(ctx, v) ? 1 : 0;
+    } else if (JS_IsNumber(v)) {
+        out->tag = KMPJS_TAG_NUMBER;
+        if (JS_ToFloat64(ctx, &out->num, v))
+            return -1;
+    } else if (JS_IsString(v)) {
+        out->tag = KMPJS_TAG_STRING;
+        if (copy_js_string(ctx, v, sbuf))
+            return -1;
+        publish(sbuf, &out->str, &out->str_len);
+    } else if (flags & KMPJS_FLAG_REF_OBJECTS) {
+        out->tag = KMPJS_TAG_REF;
+        out->num = object_kind(ctx, v);
+        out->ref = slot_new(e, JS_DupValue(ctx, v));
+        if (!out->ref) {
+            JS_ThrowOutOfMemory(ctx);
+            return -1;
+        }
+    } else if (JS_IsFunction(ctx, v)) {
+        out->tag = KMPJS_TAG_OBJECT;
+    } else {
+        JSValue json = JS_JSONStringify(ctx, v, JS_UNDEFINED, JS_UNDEFINED);
+        if (JS_IsException(json))
+            return -1;
+        out->tag = KMPJS_TAG_OBJECT;
+        if (!JS_IsUndefined(json)) {
+            int rc = copy_js_string(ctx, json, sbuf);
+            JS_FreeValue(ctx, json);
+            if (rc)
+                return -1;
+            publish(sbuf, &out->str, &out->str_len);
+        }
+    }
+    return 0;
+}
+
+static void exception_to_out(kmpjs_engine *e, kmpjs_value *out)
+{
+    JSContext *ctx = e->ctx;
+    JSValue exc, s;
+    static const char unknown[] = "unknown exception";
+
+    memset(out, 0, sizeof(*out));
+    out->tag = KMPJS_TAG_EXCEPTION;
+    exc = JS_GetException(ctx);
+
+    if (JS_IsNull(exc) && e->oom) {
+        static const char oom[] = "InternalError: out of memory";
+        e->oom = 0;
+        buf_reset(&e->out_str);
+        buf_append(&e->out_str, oom, sizeof(oom) - 1);
+        publish(&e->out_str, &out->str, &out->str_len);
+        return;
+    }
+    s = JS_ToString(ctx, exc);
+    if (JS_IsException(s) || copy_js_string(ctx, s, &e->out_str)) {
+        JS_FreeValue(ctx, JS_GetException(ctx));
+        buf_reset(&e->out_str);
+        buf_append(&e->out_str, unknown, sizeof(unknown) - 1);
+    }
+    JS_FreeValue(ctx, s);
+    publish(&e->out_str, &out->str, &out->str_len);
+
+    if (JS_IsError(ctx, exc)) {
+        s = JS_GetPropertyStr(ctx, exc, "stack");
+        if (JS_IsException(s)) {
+            JS_FreeValue(ctx, JS_GetException(ctx));
+        } else {
+            if (JS_IsString(s) && !copy_js_string(ctx, s, &e->out_stack))
+                publish(&e->out_stack, &out->stack, &out->stack_len);
+            JS_FreeValue(ctx, s);
+        }
+    }
+    JS_FreeValue(ctx, exc);
+}
+
+/* An error raised by the shim itself, with no JS exception pending. */
+static int32_t fail_message(kmpjs_engine *e, kmpjs_value *out, const char *msg)
+{
+    memset(out, 0, sizeof(*out));
+    out->tag = KMPJS_TAG_EXCEPTION;
+    buf_reset(&e->out_str);
+    buf_append(&e->out_str, msg, strlen(msg));
+    publish(&e->out_str, &out->str, &out->str_len);
+    return -1;
+}
+
+/* JS_Eval and JS_ParseJSON require input[len] == '\0'; callers hand in unterminated byte ranges. */
+static char *terminated_copy(const char *p, int32_t len)
+{
+    char *buf = malloc((size_t)len + 1);
+    if (!buf)
+        return NULL;
+    memcpy(buf, p ? p : "", (size_t)len);
+    buf[len] = '\0';
+    return buf;
+}
+
+static JSValue throw_message(JSContext *ctx, const char *p, int32_t len)
+{
+    JSValue err = JS_NewError(ctx);
+    if (JS_IsException(err))
+        return err;
+    if (JS_DefinePropertyValueStr(ctx, err, "message", JS_NewStringLen(ctx, p ? p : "", (size_t)len),
+                                  JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE) < 0) {
+        JS_FreeValue(ctx, err);
+        return JS_EXCEPTION;
+    }
+    return JS_Throw(ctx, err);
+}
+
+/* Returns an owned JSValue (or JS_EXCEPTION with the exception pending). */
+static JSValue value_from_host(kmpjs_engine *e, const kmpjs_value *v)
+{
+    JSContext *ctx = e->ctx;
+    switch (v->tag) {
+    case KMPJS_TAG_UNDEFINED:
+        return JS_UNDEFINED;
+    case KMPJS_TAG_NULL:
+        return JS_NULL;
+    case KMPJS_TAG_BOOL:
+        return JS_NewBool(ctx, v->num != 0);
+    case KMPJS_TAG_NUMBER:
+        return JS_NewFloat64(ctx, v->num);
+    case KMPJS_TAG_STRING:
+        return JS_NewStringLen(ctx, v->str ? v->str : "", (size_t)v->str_len);
+    case KMPJS_TAG_OBJECT: {
+        char *buf;
+        JSValue r;
+        if (!v->str)
+            return JS_UNDEFINED;
+        buf = terminated_copy(v->str, v->str_len);
+        if (!buf)
+            return JS_ThrowOutOfMemory(ctx);
+        r = JS_ParseJSON(ctx, buf, (size_t)v->str_len, "<host>");
+        free(buf);
+        return r;
+    }
+    case KMPJS_TAG_REF: {
+        kmp_slot *s = slot_get(e, v->ref);
+        if (!s)
+            return JS_ThrowTypeError(ctx, "invalid or released ref");
+        return JS_DupValue(ctx, s->val);
+    }
+    default:
+        return throw_message(ctx, v->str, v->str_len);
+    }
+}
+
+/* Converts an owned result and frees it; on failure the pending exception goes to *out. */
+static int32_t finish(kmpjs_engine *e, int outermost, JSValue v, int32_t flags, kmpjs_value *out)
+{
+    int32_t rc = 0;
+    if (JS_IsException(v) || value_to_out(e, v, &e->out_str, flags, out)) {
+        exception_to_out(e, out);
+        rc = -1;
+    }
+    JS_FreeValue(e->ctx, v);
+    run_end(e, outermost);
+    return rc;
+}
+
+/* ---- evaluation ---- */
+
+void kmpjs_eval(kmpjs_engine *e, const char *code, int32_t code_len, const char *filename, int32_t flags, kmpjs_value *out)
+{
+    int outermost = run_begin(e);
+    char *buf = terminated_copy(code, code_len);
+    JSValue r;
+
+    if (!buf) {
+        fail_message(e, out, "out of memory");
+        run_end(e, outermost);
+        return;
+    }
+    r = JS_Eval(e->ctx, buf, (size_t)code_len, filename, JS_EVAL_TYPE_GLOBAL);
+    free(buf);
+    finish(e, outermost, r, flags, out);
+}
+
+static JSValue js_kmp_host(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic);
+
+int32_t kmpjs_define_function(kmpjs_engine *e, const char *name, int32_t fn_id, int32_t flags, kmpjs_value *out)
+{
+    JSContext *ctx = e->ctx;
+    int magic = (fn_id << 1) | (flags & KMPJS_FLAG_REF_OBJECTS);
+    JSValue fn, global;
+    int rc;
+
+    /* the engine stores magic as int16_t: fn_id must fit in 14 bits next to the flag bit */
+    if (fn_id < 0 || fn_id > KMPJS_MAX_FN_ID)
+        return fail_message(e, out, "too many host functions");
+    fn = JS_NewCFunctionMagic(ctx, js_kmp_host, name, 0, JS_CFUNC_generic_magic, magic);
+    if (JS_IsException(fn)) {
+        exception_to_out(e, out);
+        return -1;
+    }
+    global = JS_GetGlobalObject(ctx);
+    rc = JS_SetPropertyStr(ctx, global, name, fn);
+    JS_FreeValue(ctx, global);
+    if (rc < 0) {
+        exception_to_out(e, out);
+        return -1;
+    }
+    memset(out, 0, sizeof(*out));
+    return 0;
+}
+
+static JSValue js_kmp_host(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int magic)
+{
+    kmpjs_engine *e = JS_GetContextOpaque(ctx);
+    int32_t fn_id = magic >> 1;
+    int32_t flags = magic & KMPJS_FLAG_REF_OBJECTS;
+    kmpjs_value *args = NULL;
+    kmp_buf *bufs = NULL;
+    kmpjs_value result = {0};
+    JSValue ret = JS_EXCEPTION;
+    int i, rc, converted = 0;
+
+    if (!e->host)
+        return JS_ThrowInternalError(ctx, "no host function handler");
+    if (argc > 0) {
+        args = calloc((size_t)argc, sizeof(*args));
+        bufs = calloc((size_t)argc, sizeof(*bufs));
+        if (!args || !bufs) {
+            ret = JS_ThrowOutOfMemory(ctx);
+            goto done;
+        }
+    }
+    for (i = 0; i < argc; i++) {
+        if (value_to_out(e, argv[i], &bufs[i], flags, &args[i]))
+            goto done;
+        converted++;
+    }
+    rc = e->host(e->user, fn_id, args, argc, &result);
+    if (rc != 0)
+        ret = throw_message(ctx, result.str, result.str_len);
+    else
+        ret = value_from_host(e, &result);
+    free((void *)result.str);
+    free((void *)result.stack);
+done:
+    /* refs handed to the host for this call are transient unless the host retained them */
+    for (i = 0; i < converted; i++) {
+        if (args[i].tag == KMPJS_TAG_REF)
+            kmpjs_ref_release(e, args[i].ref);
+    }
+    for (i = 0; i < argc && bufs; i++)
+        buf_free(&bufs[i]);
+    free(bufs);
+    free(args);
+    return ret;
+}
+
+/* ---- ref operations ---- */
+
+/* Property access and JSON.stringify can run script (accessors, toJSON), so every ref
+   operation enters the running state like kmpjs_eval does to stay interruptible. */
+int32_t kmpjs_ref_get(kmpjs_engine *e, int64_t ref, const char *name, int32_t flags, kmpjs_value *out)
+{
+    kmp_slot *s = slot_get(e, ref);
+    int outermost;
+    if (!s)
+        return fail_message(e, out, "invalid or released ref");
+    outermost = run_begin(e);
+    return finish(e, outermost, JS_GetPropertyStr(e->ctx, s->val, name), flags, out);
+}
+
+int32_t kmpjs_ref_get_index(kmpjs_engine *e, int64_t ref, int32_t index, int32_t flags, kmpjs_value *out)
+{
+    kmp_slot *s = slot_get(e, ref);
+    int outermost;
+    if (!s)
+        return fail_message(e, out, "invalid or released ref");
+    if (index < 0)
+        return fail_message(e, out, "negative index");
+    outermost = run_begin(e);
+    return finish(e, outermost, JS_GetPropertyUint32(e->ctx, s->val, (uint32_t)index), flags, out);
+}
+
+int32_t kmpjs_ref_set(kmpjs_engine *e, int64_t ref, const char *name, const kmpjs_value *value, kmpjs_value *out)
+{
+    JSContext *ctx = e->ctx;
+    kmp_slot *s = slot_get(e, ref);
+    JSValue v;
+    int outermost, rc = -1;
+    if (!s)
+        return fail_message(e, out, "invalid or released ref");
+    outermost = run_begin(e);
+    v = value_from_host(e, value);
+    if (JS_IsException(v) || JS_SetPropertyStr(ctx, s->val, name, v) < 0) {
+        exception_to_out(e, out);
+    } else {
+        memset(out, 0, sizeof(*out));
+        rc = 0;
+    }
+    run_end(e, outermost);
+    return rc;
+}
+
+int32_t kmpjs_ref_call(kmpjs_engine *e, int64_t ref, int64_t this_ref, const kmpjs_value *args,
+                       int32_t argc, int32_t flags, kmpjs_value *out)
+{
+    JSContext *ctx = e->ctx;
+    kmp_slot *fs = slot_get(e, ref);
+    kmp_slot *ts = NULL;
+    JSValue *argv = NULL;
+    JSValue r = JS_EXCEPTION;
+    int i, converted = 0, outermost;
+
+    if (!fs)
+        return fail_message(e, out, "invalid or released ref");
+    if (!JS_IsFunction(ctx, fs->val))
+        return fail_message(e, out, "ref is not a function");
+    if (this_ref) {
+        ts = slot_get(e, this_ref);
+        if (!ts)
+            return fail_message(e, out, "invalid or released this ref");
+    }
+    outermost = run_begin(e);
+    if (argc > 0) {
+        argv = calloc((size_t)argc, sizeof(*argv));
+        if (!argv) {
+            fail_message(e, out, "out of memory");
+            run_end(e, outermost);
+            return -1;
+        }
+    }
+    for (i = 0; i < argc; i++) {
+        argv[i] = value_from_host(e, &args[i]);
+        if (JS_IsException(argv[i]))
+            goto done;
+        converted++;
+    }
+    r = JS_Call(ctx, fs->val, ts ? ts->val : JS_UNDEFINED, argc, argv);
+done:
+    for (i = 0; i < converted; i++)
+        JS_FreeValue(ctx, argv[i]);
+    free(argv);
+    return finish(e, outermost, r, flags, out);
+}
+
+int32_t kmpjs_ref_to_json(kmpjs_engine *e, int64_t ref, kmpjs_value *out)
+{
+    kmp_slot *s = slot_get(e, ref);
+    JSValue json;
+    int outermost, rc = 0;
+    if (!s)
+        return fail_message(e, out, "invalid or released ref");
+    memset(out, 0, sizeof(*out));
+    out->tag = KMPJS_TAG_OBJECT;
+    if (JS_IsFunction(e->ctx, s->val))
+        return 0;
+    outermost = run_begin(e);
+    json = JS_JSONStringify(e->ctx, s->val, JS_UNDEFINED, JS_UNDEFINED);
+    if (JS_IsException(json) || (!JS_IsUndefined(json) && copy_js_string(e->ctx, json, &e->out_str))) {
+        exception_to_out(e, out);
+        rc = -1;
+    } else if (!JS_IsUndefined(json)) {
+        publish(&e->out_str, &out->str, &out->str_len);
+    }
+    JS_FreeValue(e->ctx, json);
+    run_end(e, outermost);
+    return rc;
+}

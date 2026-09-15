@@ -1,0 +1,10 @@
+package wang.harlon.quickjs
+
+/**
+ * Diagnostics snapshot. [liveRefs] is the number of [JsRef.close] calls still owed: every open
+ * [JsRef] counts one, a [JsRef.retain] adds one more, and transient host-function arguments count
+ * during the call; [refSlots] is how many handle slots the engine has allocated so far (live plus reusable).
+ */
+class JsEngineStats(val liveRefs: Int, val refSlots: Int) {
+    override fun toString(): String = "JsEngineStats(liveRefs=$liveRefs, refSlots=$refSlots)"
+}
