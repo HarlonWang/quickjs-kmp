@@ -32,7 +32,7 @@ JsEngine(JsEngineConfig(memoryLimit = 8L * 1024 * 1024, logger = ::println)).use
 }
 ```
 
-- 原始类型以 `JsValue.Num` / `Str` / `Bool` / `Null` / `Undefined` 过桥；对象与数组默认以 `JsValue.Json` 过桥。JSON 会丢掉 `JSON.stringify` 本来就丢的东西（函数、`undefined` 属性、`Map` / `Set` 的内容），需要保真时用 `ObjectTransport.REF`。
+- 原始类型以 `JsValue.Num` / `Str` / `Bool` / `Null` / `Undefined` 过桥，`BigInt` 以十进制文本装在 `JsValue.BigInt` 里，`ArrayBuffer` 与各类 TypedArray 以字节拷贝装在 `JsValue.Bytes` 里（交给 JS 的 `Bytes` 变成 `ArrayBuffer`）；其余对象与数组默认以 `JsValue.Json` 过桥。JSON 会丢掉 `JSON.stringify` 本来就丢的东西（函数、`undefined` 属性、`Map` / `Set` 的内容），需要保真时用 `ObjectTransport.REF`。
 - 脚本抛异常、语法错误或撞到 `memoryLimit` 时抛出 `JsException`，带引擎的 message 与 `stack`。
 - 宿主函数抛出的 Kotlin 异常在 JS 侧表现为带同样 message 的 `Error`。
 - `engine.interrupt()` 可在任意线程调用，以不可捕获的 `InternalError: interrupted` 终止正在运行的脚本。

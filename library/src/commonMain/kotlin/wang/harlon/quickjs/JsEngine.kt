@@ -142,6 +142,8 @@ class JsEngine(private val config: JsEngineConfig = JsEngineConfig()) : AutoClos
         NativeTag.STRING -> JsValue.Str(raw.str ?: "")
         NativeTag.OBJECT -> JsValue.Json(raw.str)
         NativeTag.REF -> JsRef(this, raw.ref, raw.num.toInt())
+        NativeTag.BIGINT -> JsValue.BigInt(raw.str ?: "0")
+        NativeTag.BINARY -> JsValue.Bytes(raw.bytes ?: ByteArray(0))
         NativeTag.EXCEPTION -> throw JsException(raw.str ?: "unknown exception", raw.stack)
         else -> error("unknown native tag ${raw.tag}")
     }
@@ -153,6 +155,8 @@ class JsEngine(private val config: JsEngineConfig = JsEngineConfig()) : AutoClos
         is JsValue.Num -> RawValue(NativeTag.NUMBER, num = value.value)
         is JsValue.Str -> RawValue(NativeTag.STRING, str = value.value)
         is JsValue.Json -> RawValue(NativeTag.OBJECT, str = value.json)
+        is JsValue.BigInt -> RawValue(NativeTag.BIGINT, str = value.value)
+        is JsValue.Bytes -> RawValue(NativeTag.BINARY, bytes = value.value)
         is JsRef -> {
             checkOwned(value)
             check(value.isValid) { "JsRef is closed" }

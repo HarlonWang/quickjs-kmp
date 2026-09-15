@@ -13,6 +13,8 @@ internal class RawValue(
     val num: Double = 0.0,
     val str: String? = null,
     val stack: String? = null,
+    /** KMPJS_TAG_BINARY payload; [str] is null then. */
+    val bytes: ByteArray? = null,
 )
 
 /** Tags and flags mirror KMPJS_TAG_* / KMPJS_FLAG_* / KMPJS_REF_* in native/shim/quickjs_kmp.h. */
@@ -25,6 +27,8 @@ internal object NativeTag {
     const val OBJECT = 5
     const val EXCEPTION = 6
     const val REF = 7
+    const val BIGINT = 8
+    const val BINARY = 9
 
     const val FLAG_REF_OBJECTS = 1
     const val REF_FUNCTION = 1

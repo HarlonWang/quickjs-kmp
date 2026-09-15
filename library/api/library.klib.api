@@ -22,6 +22,20 @@ abstract fun interface wang.harlon.quickjs/JsHostFunction { // wang.harlon.quick
 }
 
 sealed interface wang.harlon.quickjs/JsValue { // wang.harlon.quickjs/JsValue|null[0]
+    final class BigInt : wang.harlon.quickjs/JsValue { // wang.harlon.quickjs/JsValue.BigInt|null[0]
+        constructor <init>(kotlin/Long) // wang.harlon.quickjs/JsValue.BigInt.<init>|<init>(kotlin.Long){}[0]
+        constructor <init>(kotlin/String) // wang.harlon.quickjs/JsValue.BigInt.<init>|<init>(kotlin.String){}[0]
+
+        final val value // wang.harlon.quickjs/JsValue.BigInt.value|{}value[0]
+            final fun <get-value>(): kotlin/String // wang.harlon.quickjs/JsValue.BigInt.value.<get-value>|<get-value>(){}[0]
+
+        final fun component1(): kotlin/String // wang.harlon.quickjs/JsValue.BigInt.component1|component1(){}[0]
+        final fun copy(kotlin/String = ...): wang.harlon.quickjs/JsValue.BigInt // wang.harlon.quickjs/JsValue.BigInt.copy|copy(kotlin.String){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // wang.harlon.quickjs/JsValue.BigInt.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // wang.harlon.quickjs/JsValue.BigInt.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // wang.harlon.quickjs/JsValue.BigInt.toString|toString(){}[0]
+    }
+
     final class Bool : wang.harlon.quickjs/JsValue { // wang.harlon.quickjs/JsValue.Bool|null[0]
         constructor <init>(kotlin/Boolean) // wang.harlon.quickjs/JsValue.Bool.<init>|<init>(kotlin.Boolean){}[0]
 
@@ -33,6 +47,17 @@ sealed interface wang.harlon.quickjs/JsValue { // wang.harlon.quickjs/JsValue|nu
         final fun equals(kotlin/Any?): kotlin/Boolean // wang.harlon.quickjs/JsValue.Bool.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // wang.harlon.quickjs/JsValue.Bool.hashCode|hashCode(){}[0]
         final fun toString(): kotlin/String // wang.harlon.quickjs/JsValue.Bool.toString|toString(){}[0]
+    }
+
+    final class Bytes : wang.harlon.quickjs/JsValue { // wang.harlon.quickjs/JsValue.Bytes|null[0]
+        constructor <init>(kotlin/ByteArray) // wang.harlon.quickjs/JsValue.Bytes.<init>|<init>(kotlin.ByteArray){}[0]
+
+        final val value // wang.harlon.quickjs/JsValue.Bytes.value|{}value[0]
+            final fun <get-value>(): kotlin/ByteArray // wang.harlon.quickjs/JsValue.Bytes.value.<get-value>|<get-value>(){}[0]
+
+        final fun equals(kotlin/Any?): kotlin/Boolean // wang.harlon.quickjs/JsValue.Bytes.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // wang.harlon.quickjs/JsValue.Bytes.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // wang.harlon.quickjs/JsValue.Bytes.toString|toString(){}[0]
     }
 
     final class Json : wang.harlon.quickjs/JsValue { // wang.harlon.quickjs/JsValue.Json|null[0]

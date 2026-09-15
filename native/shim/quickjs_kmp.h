@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-#define KMPJS_ABI_VERSION 2
+#define KMPJS_ABI_VERSION 3
 
 typedef struct kmpjs_engine kmpjs_engine;
 
@@ -22,6 +22,8 @@ enum {
     KMPJS_TAG_OBJECT = 5,    /* str = JSON text, or NULL when not serializable */
     KMPJS_TAG_EXCEPTION = 6, /* str = message, stack = JS stack trace or NULL */
     KMPJS_TAG_REF = 7,       /* ref = 64-bit handle (slot index | generation), num = KMPJS_REF_* kind bits */
+    KMPJS_TAG_BIGINT = 8,    /* str = decimal text */
+    KMPJS_TAG_BINARY = 9,    /* str = raw bytes copied out of an ArrayBuffer / typed array; handed in as an ArrayBuffer */
 };
 
 /* KMPJS_TAG_REF kind bits carried in kmpjs_value.num */

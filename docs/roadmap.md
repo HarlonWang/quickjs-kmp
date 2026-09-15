@@ -14,7 +14,7 @@
 ## M2 核心 API
 
 - 句柄表（连续数组、dup / free 版本）、`JsRef`、`ObjectTransport`、transient / retain；引擎 close 的固定顺序，ASan 用例「持有未 close 的 JsRef 时 close 引擎」
-- 新增 tag：BIGINT、BINARY；`JsValue.BigInt` / `JsValue.Bytes`
+- ~~新增 tag：BIGINT、BINARY；`JsValue.BigInt` / `JsValue.Bytes`~~ 已完成
 - `JsRuntime`：Mutex、dispatcher、interrupt、超时；`JsEngineConfig` 的 `memoryLimit` / `maxStackSize`（默认 256 KB）/ `gcThreshold`；用例「catch 块内仍能被中断」
 - ~~**微任务排空**（只在最外层）与 **Promise 结果**~~ 已完成，含中断后丢弃残留 job
 - ~~未处理 rejection：`JS_SetHostPromiseRejectionTracker` → `JsEngineConfig.onUnhandledRejection`~~ 已完成

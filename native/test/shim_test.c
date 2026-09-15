@@ -166,6 +166,42 @@ static void test_promises(void)
     (void)out;
 }
 
+static void test_bigint_and_binary(void)
+{
+    kmpjs_value v, arg, out;
+    int64_t f;
+
+    v = eval("2n ** 64n", 0); CHECK(v.tag == KMPJS_TAG_BIGINT && str_is(&v, "18446744073709551616"));
+    v = eval("-7n", 0); CHECK(v.tag == KMPJS_TAG_BIGINT && str_is(&v, "-7"));
+    v = eval("2n ** 64n", KMPJS_FLAG_REF_OBJECTS); CHECK(v.tag == KMPJS_TAG_BIGINT);
+    v = eval("new Uint8Array([1, 2, 3])", 0); CHECK(v.tag == KMPJS_TAG_BINARY && v.str_len == 3 && memcmp(v.str, "\1\2\3", 3) == 0);
+    v = eval("new Uint8Array([9, 1, 2, 3, 9]).subarray(1, 4)", 0); CHECK(v.tag == KMPJS_TAG_BINARY && v.str_len == 3 && memcmp(v.str, "\1\2\3", 3) == 0);
+    v = eval("new Int32Array([1]).buffer", 0); CHECK(v.tag == KMPJS_TAG_BINARY && v.str_len == 4);
+    v = eval("new Float64Array(2)", 0); CHECK(v.tag == KMPJS_TAG_BINARY && v.str_len == 16);
+    v = eval("new ArrayBuffer(0)", 0); CHECK(v.tag == KMPJS_TAG_BINARY && v.str_len == 0);
+    v = eval("new DataView(new ArrayBuffer(4))", 0); CHECK(v.tag == KMPJS_TAG_OBJECT);
+    v = eval("var ab = new ArrayBuffer(4); structuredClone(ab, {transfer: [ab]}); ab", 0); CHECK(v.tag == KMPJS_TAG_EXCEPTION || v.tag == KMPJS_TAG_BINARY);
+    v = eval("new Uint8Array([1])", KMPJS_FLAG_REF_OBJECTS); CHECK(v.tag == KMPJS_TAG_REF && ((int)v.num & KMPJS_REF_ARRAY) == 0);
+    kmpjs_ref_release(g, v.ref);
+    /* into the engine: BigInt from text, bytes as an ArrayBuffer */
+    v = eval("(function (n, buf) { return typeof n + ':' + (n + 1n) + ':' + buf.byteLength + ':' + new Uint8Array(buf).join(); })", KMPJS_FLAG_REF_OBJECTS);
+    f = v.ref;
+    memset(&arg, 0, sizeof arg);
+    {
+        kmpjs_value args[2];
+        set_str(&args[0], KMPJS_TAG_BIGINT, "18446744073709551616");
+        set_str(&args[1], KMPJS_TAG_BINARY, "\5\6");
+        CHECK(kmpjs_ref_call(g, f, 0, args, 2, 0, &v) == 0 && str_is(&v, "bigint:18446744073709551617:2:5,6"));
+        kmpjs_free((void *)args[0].str);
+        kmpjs_free((void *)args[1].str);
+        set_str(&args[0], KMPJS_TAG_BIGINT, "not a number");
+        CHECK(kmpjs_ref_call(g, f, 0, args, 1, 0, &v) != 0 && str_has(&v, "SyntaxError"));
+        kmpjs_free((void *)args[0].str);
+    }
+    kmpjs_ref_release(g, f);
+    (void)out;
+}
+
 static void test_values(void)
 {
     kmpjs_value v;
@@ -305,6 +341,7 @@ int main(void)
     test_host_functions();
     test_refs();
     test_promises();
+    test_bigint_and_binary();
     /* destroy with refs still open must be clean */
     v = eval("({leak: 1})", KMPJS_FLAG_REF_OBJECTS); CHECK(v.tag == KMPJS_TAG_REF);
     kmpjs_destroy(g);

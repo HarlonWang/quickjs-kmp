@@ -48,6 +48,11 @@ struct kmpjs_engine {
     kmpjs_log_fn log;
     kmpjs_rejection_fn rejection;
     size_t max_stack_size;
+    JSClassID cls_array_buffer;
+    JSClassID cls_shared_array_buffer;
+    JSClassID cls_typed_array_first; /* Uint8ClampedArray .. Float64Array are contiguous */
+    JSClassID cls_typed_array_last;
+    JSValue bigint_ctor;
     kmp_rejected *rejected; /* rejected without a handler so far; reported after the outermost drain */
     int32_t rejected_count;
     int32_t rejected_cap;
@@ -257,6 +262,38 @@ done:
     JS_FreeValue(ctx, console);
     JS_FreeValue(ctx, performance);
     JS_FreeValue(ctx, global);
+    return rc;
+}
+
+/* The class ids of the binary types are engine internals; instances tell them at startup so the
+   conversion can recognise them without throwing a TypeError per non-binary object. */
+static int probe_classes(kmpjs_engine *e)
+{
+    static const char src[] = "[new ArrayBuffer(0), new SharedArrayBuffer(0), new Uint8ClampedArray(0), new Float64Array(0), BigInt]";
+    JSContext *ctx = e->ctx;
+    JSValue arr = JS_Eval(ctx, src, sizeof(src) - 1, "<init>", JS_EVAL_TYPE_GLOBAL);
+    JSValue item;
+    int rc = -1;
+
+    if (JS_IsException(arr))
+        return -1;
+    item = JS_GetPropertyUint32(ctx, arr, 0);
+    e->cls_array_buffer = JS_GetClassID(item);
+    JS_FreeValue(ctx, item);
+    item = JS_GetPropertyUint32(ctx, arr, 1);
+    e->cls_shared_array_buffer = JS_GetClassID(item);
+    JS_FreeValue(ctx, item);
+    item = JS_GetPropertyUint32(ctx, arr, 2);
+    e->cls_typed_array_first = JS_GetClassID(item);
+    JS_FreeValue(ctx, item);
+    item = JS_GetPropertyUint32(ctx, arr, 3);
+    e->cls_typed_array_last = JS_GetClassID(item);
+    JS_FreeValue(ctx, item);
+    e->bigint_ctor = JS_GetPropertyUint32(ctx, arr, 4);
+    if (e->cls_array_buffer && e->cls_shared_array_buffer && e->cls_typed_array_first &&
+        e->cls_typed_array_last > e->cls_typed_array_first && JS_IsFunction(ctx, e->bigint_ctor))
+        rc = 0;
+    JS_FreeValue(ctx, arr);
     return rc;
 }
 
@@ -530,7 +567,9 @@ kmpjs_engine *kmpjs_create(const kmpjs_config *config, void *user, kmpjs_host_fn
         return NULL;
     }
     JS_SetContextOpaque(e->ctx, e);
-    if (install_globals(e->ctx)) {
+    e->bigint_ctor = JS_UNDEFINED;
+    if (install_globals(e->ctx) || probe_classes(e)) {
+        JS_FreeValue(e->ctx, e->bigint_ctor);
         JS_FreeContext(e->ctx);
         JS_FreeRuntime(e->rt);
         free(e);
@@ -550,6 +589,7 @@ void kmpjs_destroy(kmpjs_engine *e)
             JS_FreeValue(e->ctx, e->slots[i].val);
     }
     free(e->slots);
+    JS_FreeValue(e->ctx, e->bigint_ctor);
     while (e->rejected_count > 0)
         forget_rejected(e, e->rejected_count - 1);
     free(e->rejected);
@@ -596,6 +636,46 @@ static int object_kind(JSContext *ctx, JSValueConst v)
     return kind;
 }
 
+/* ArrayBuffer, SharedArrayBuffer and typed arrays leave as a copy of their bytes. Returns 0 for
+   any other value; for a binary value returns 1 with *out filled, or with the exception pending
+   (detached buffer) and out->tag left at KMPJS_TAG_EXCEPTION. */
+static int binary_to_out(kmpjs_engine *e, JSValueConst v, kmp_buf *sbuf, kmpjs_value *out)
+{
+    JSContext *ctx = e->ctx;
+    JSClassID cid = JS_GetClassID(v);
+    const uint8_t *data;
+    size_t len, offset = 0;
+    JSValue buffer = JS_UNDEFINED;
+    int rc;
+
+    if (cid == e->cls_array_buffer || cid == e->cls_shared_array_buffer) {
+        data = JS_GetArrayBuffer(ctx, &len, v);
+    } else if (cid >= e->cls_typed_array_first && cid <= e->cls_typed_array_last) {
+        buffer = JS_GetTypedArrayBuffer(ctx, v, &offset, &len, NULL);
+        if (JS_IsException(buffer))
+            data = NULL;
+        else {
+            size_t total;
+            data = JS_GetArrayBuffer(ctx, &total, buffer);
+        }
+    } else {
+        return 0;
+    }
+    out->tag = KMPJS_TAG_EXCEPTION;
+    if (data) {
+        buf_reset(sbuf);
+        rc = buf_append(sbuf, data + offset, len);
+        if (rc == 0) {
+            out->tag = KMPJS_TAG_BINARY;
+            publish(sbuf, &out->str, &out->str_len);
+        } else {
+            JS_ThrowOutOfMemory(ctx);
+        }
+    }
+    JS_FreeValue(ctx, buffer);
+    return 1;
+}
+
 /* Converts a borrowed JS value. Returns -1 with the exception left pending in ctx. */
 static int value_to_out(kmpjs_engine *e, JSValueConst v, kmp_buf *sbuf, int32_t flags, kmpjs_value *out)
 {
@@ -618,6 +698,11 @@ static int value_to_out(kmpjs_engine *e, JSValueConst v, kmp_buf *sbuf, int32_t 
         if (copy_js_string(ctx, v, sbuf))
             return -1;
         publish(sbuf, &out->str, &out->str_len);
+    } else if (JS_IsBigInt(ctx, v)) {
+        out->tag = KMPJS_TAG_BIGINT;
+        if (copy_js_string(ctx, v, sbuf))
+            return -1;
+        publish(sbuf, &out->str, &out->str_len);
     } else if (flags & KMPJS_FLAG_REF_OBJECTS) {
         out->tag = KMPJS_TAG_REF;
         out->num = object_kind(ctx, v);
@@ -628,6 +713,8 @@ static int value_to_out(kmpjs_engine *e, JSValueConst v, kmp_buf *sbuf, int32_t 
         }
     } else if (JS_IsFunction(ctx, v)) {
         out->tag = KMPJS_TAG_OBJECT;
+    } else if (binary_to_out(e, v, sbuf, out)) {
+        return out->tag == KMPJS_TAG_BINARY ? 0 : -1;
     } else {
         JSValue json = JS_JSONStringify(ctx, v, JS_UNDEFINED, JS_UNDEFINED);
         if (JS_IsException(json))
@@ -803,6 +890,17 @@ static JSValue value_from_host(kmpjs_engine *e, const kmpjs_value *v)
             return JS_ThrowTypeError(ctx, "invalid or released ref");
         return JS_DupValue(ctx, s->val);
     }
+    case KMPJS_TAG_BIGINT: {
+        JSValue text = JS_NewStringLen(ctx, v->str ? v->str : "", (size_t)v->str_len);
+        JSValue r;
+        if (JS_IsException(text))
+            return text;
+        r = JS_Call(ctx, e->bigint_ctor, JS_UNDEFINED, 1, &text);
+        JS_FreeValue(ctx, text);
+        return r;
+    }
+    case KMPJS_TAG_BINARY:
+        return JS_NewArrayBufferCopy(ctx, (const uint8_t *)(v->str ? v->str : ""), (size_t)v->str_len);
     default:
         return throw_message(ctx, v->str, v->str_len);
     }

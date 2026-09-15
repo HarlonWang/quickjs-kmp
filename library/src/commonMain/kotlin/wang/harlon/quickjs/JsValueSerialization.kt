@@ -1,6 +1,7 @@
 package wang.harlon.quickjs
 
 import kotlinx.serialization.DeserializationStrategy
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.json.Json
@@ -9,6 +10,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonUnquotedLiteral
 import kotlinx.serialization.serializer
 
 /**
@@ -23,10 +25,12 @@ inline fun <reified T> Json.encodeToJsValue(value: T): JsValue =
 
 /**
  * Decodes [value] with [deserializer]. `undefined` decodes like `null`; a [JsRef] is decoded from
- * its `JSON.stringify` output.
+ * its `JSON.stringify` output; a [JsValue.BigInt] is an unquoted number literal; [JsValue.Bytes]
+ * is an array of signed bytes, so it decodes into a `ByteArray` or `List<Byte>`.
  * @throws SerializationException when the value is not JSON-serializable (a function, for example)
  * or does not match [deserializer].
  */
+@OptIn(ExperimentalSerializationApi::class)
 fun <T> Json.decodeFromJsValue(deserializer: DeserializationStrategy<T>, value: JsValue): T {
     val element = when (value) {
         is JsValue.Json -> return decodeFromString(deserializer, value.json ?: throw notSerializable())
@@ -35,6 +39,8 @@ fun <T> Json.decodeFromJsValue(deserializer: DeserializationStrategy<T>, value: 
         is JsValue.Bool -> JsonPrimitive(value.value)
         is JsValue.Str -> JsonPrimitive(value.value)
         is JsValue.Num -> value.value.toJsonPrimitive()
+        is JsValue.BigInt -> JsonUnquotedLiteral(value.value)
+        is JsValue.Bytes -> JsonArray(value.value.map { JsonPrimitive(it.toInt()) })
     }
     return decodeFromJsonElement(deserializer, element)
 }

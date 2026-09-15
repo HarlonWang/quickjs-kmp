@@ -17,7 +17,7 @@ commonMain      JsEngine / JsValue / JsRef / JsRuntime / JsException（expect �
 
 ## shim 的设计约束
 
-**值跨界只传原始类型与字符串。** `kmpjs_value` 是唯一的跨界类型：undefined / null / bool / number 直接携带，字符串以 UTF-8 字节加长度传递，对象与数组经 `JS_JSONStringify` 以 JSON 文本传递（函数的 JSON 为空）。宿主函数的返回值反向走 `JS_ParseJSON`。字符串以字节数组过桥，Kotlin 侧用自带的 `Wtf8` 编解码：引擎对未配对代理项按 WTF-8 输出并能解回，JNI 的 modified UTF-8 与 Kotlin 标准 UTF-8 编解码都会把它们改写成替换字符。`JS_Eval` 与 `JS_ParseJSON` 要求输入以 NUL 结尾，shim 把所有源码与 JSON 拷贝成 NUL 结尾再交给引擎。
+**值跨界只传原始类型与字节。** `kmpjs_value` 是唯一的跨界类型：undefined / null / bool / number 直接携带，字符串以 UTF-8 字节加长度传递，BigInt 以十进制文本传递，ArrayBuffer / TypedArray 以字节拷贝传递（判型靠启动时探出的 class id 区间），对象与数组经 `JS_JSONStringify` 以 JSON 文本传递（函数的 JSON 为空）。宿主函数的返回值反向走 `JS_ParseJSON`。字符串以字节数组过桥，Kotlin 侧用自带的 `Wtf8` 编解码：引擎对未配对代理项按 WTF-8 输出并能解回，JNI 的 modified UTF-8 与 Kotlin 标准 UTF-8 编解码都会把它们改写成替换字符。`JS_Eval` 与 `JS_ParseJSON` 要求输入以 NUL 结尾，shim 把所有源码与 JSON 拷贝成 NUL 结尾再交给引擎。
 
 **单一 trampoline 承接宿主函数。** `registerFunction` 用 `JS_NewCFunctionMagic` 造一个 C 函数对象挂到全局对象上，magic 里打包 fn_id 与 flags，调用时 C 侧按 fn_id 分发到 Kotlin。Kotlin/Native 的 `staticCFunction` 不能捕获状态，引擎实例通过 `JS_SetContextOpaque` 挂在上下文上，回调用 `StableRef` 取回。
 
