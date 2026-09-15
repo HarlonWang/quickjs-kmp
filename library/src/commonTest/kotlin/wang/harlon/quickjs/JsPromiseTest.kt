@@ -4,7 +4,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class JsPromiseTest {
@@ -103,6 +102,14 @@ class JsPromiseTest {
     fun scriptExceptionWinsOverJobFailures() = JsEngine().use { engine ->
         val e = assertFailsWith<JsException> { engine.evaluate("Promise.resolve().then(() => { throw new Error('in job'); }); null.x") }
         assertEquals("TypeError: cannot read property 'x' of null", e.message)
-        assertNull(engine.evaluate("undefined").let { (it as? JsRef) })
+    }
+
+    @Test
+    fun jobsReenteringTheEngineDoNotClobberTheResult() = JsEngine().use { engine ->
+        engine.registerFunction("inner") { engine.evaluate("'nested result'") }
+        val e = assertFailsWith<JsException> { engine.evaluate("Promise.resolve().then(() => inner()); null.x", "clobber.js") }
+        assertEquals("TypeError: cannot read property 'x' of null", e.message)
+        assertTrue(e.jsStack.orEmpty().contains("clobber.js"), "stack was: ${e.jsStack}")
+        assertEquals(JsValue.Str("kept"), engine.evaluate("Promise.resolve().then(() => inner()); 'kept'"))
     }
 }

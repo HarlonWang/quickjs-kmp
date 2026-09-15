@@ -41,7 +41,7 @@ JsEngine(JsEngineConfig(memoryLimit = 8L * 1024 * 1024, logger = ::println)).use
 
 ### Promise 与 `async`
 
-每次最外层引擎调用返回前都会排空微任务队列，所以 `then` 回调和 `await` 之后的续行在同一次调用里跑完。Promise 结果会被解包：fulfilled 给出它的值，rejected 抛 `JsException`，仍是 pending 的以带 `isPromise` 的 `JsRef` 返回，在之后的调用中 settle。
+每次最外层引擎调用返回前都会排空微任务队列，所以 `then` 回调和 `await` 之后的续行在同一次调用里跑完。Promise 结果会被解包：fulfilled 给出它的值，rejected 抛 `JsException`，仍是 pending 的以 `isPromise` 为 true 的 `JsRef` 返回；Promise 本身可能在之后的调用中 settle，标记不会随之改变。
 
 ```kotlin
 JsEngine(JsEngineConfig(onUnhandledRejection = { e -> println("lost: ${e.message}") })).use { engine ->

@@ -132,6 +132,10 @@ static void test_promises(void)
     v = eval("order = []; Promise.resolve().then(() => order.push('micro')); nested(); order.push('sync'); order.join()", 0);
     CHECK(str_is(&v, "sync"));
     v = eval("order.join()", 0); CHECK(str_is(&v, "sync,micro"));
+    /* a job that re-enters the engine through a host function must not clobber the call's own error */
+    v = eval("Promise.resolve().then(() => nested()); null.x", 0);
+    CHECK(v.tag == KMPJS_TAG_EXCEPTION && str_is(&v, "TypeError: cannot read property 'x' of null"));
+    v = eval("Promise.resolve().then(() => nested()); 'kept'", 0); CHECK(str_is(&v, "kept"));
     /* settled promises are unwrapped, pending ones come back as refs */
     v = eval("(async () => { await null; return 6 * 7; })()", 0); CHECK(v.tag == KMPJS_TAG_NUMBER && v.num == 42);
     v = eval("(async () => { throw new Error('nope'); })()", 0); CHECK(v.tag == KMPJS_TAG_EXCEPTION && str_is(&v, "Error: nope"));

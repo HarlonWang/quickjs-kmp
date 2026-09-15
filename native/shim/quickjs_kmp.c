@@ -675,21 +675,17 @@ static void error_to_out(kmpjs_engine *e, JSValue exc, kmp_buf *sbuf, kmp_buf *s
     JS_FreeValue(ctx, exc);
 }
 
+static JSValue take_exception(kmpjs_engine *e, int *oom);
+static void oom_to_out(kmpjs_engine *e, kmpjs_value *out);
+
 static void exception_to_out(kmpjs_engine *e, kmpjs_value *out)
 {
-    JSValue exc = JS_GetException(e->ctx);
-
-    if (JS_IsNull(exc) && e->oom) {
-        static const char oom[] = "InternalError: out of memory";
-        e->oom = 0;
-        memset(out, 0, sizeof(*out));
-        out->tag = KMPJS_TAG_EXCEPTION;
-        buf_reset(&e->out_str);
-        buf_append(&e->out_str, oom, sizeof(oom) - 1);
-        publish(&e->out_str, &out->str, &out->str_len);
-        return;
-    }
-    error_to_out(e, exc, &e->out_str, &e->out_stack, out);
+    int oom;
+    JSValue exc = take_exception(e, &oom);
+    if (oom)
+        oom_to_out(e, out);
+    else
+        error_to_out(e, exc, &e->out_str, &e->out_stack, out);
 }
 
 static void report_rejections(kmpjs_engine *e)
@@ -700,8 +696,15 @@ static void report_rejections(kmpjs_engine *e)
         JSValue r = JS_DupValue(e->ctx, e->rejected[last].reason);
         forget_rejected(e, last);
         error_to_out(e, r, &e->rej_str, &e->rej_stack, &reason);
-        if (e->rejection)
+        if (e->rejection) {
             e->rejection(e->user, &reason);
+        } else if (e->log) {
+            static const char prefix[] = "Unhandled promise rejection: ";
+            buf_reset(&e->log_line);
+            buf_append(&e->log_line, prefix, sizeof(prefix) - 1);
+            buf_append(&e->log_line, reason.str, (size_t)reason.str_len);
+            e->log(e->user, e->log_line.data, e->log_line.len);
+        }
     }
 }
 
@@ -805,36 +808,67 @@ static JSValue value_from_host(kmpjs_engine *e, const kmpjs_value *v)
     }
 }
 
-/* Converts an owned result and frees it; on failure the pending exception goes to *out.
-   The outermost call drains microtasks first (the call's own exception is captured before
-   a job can replace it), unwraps a Promise result when asked, then reports rejections. */
+/* Marks the pending exception as captured: the value is kept, formatting waits until the end. */
+static JSValue take_exception(kmpjs_engine *e, int *oom)
+{
+    JSValue exc = JS_GetException(e->ctx);
+    *oom = JS_IsNull(exc) && e->oom;
+    e->oom = 0;
+    return exc;
+}
+
+static void oom_to_out(kmpjs_engine *e, kmpjs_value *out)
+{
+    static const char oom[] = "InternalError: out of memory";
+    memset(out, 0, sizeof(*out));
+    out->tag = KMPJS_TAG_EXCEPTION;
+    buf_reset(&e->out_str);
+    buf_append(&e->out_str, oom, sizeof(oom) - 1);
+    publish(&e->out_str, &out->str, &out->str_len);
+}
+
+/* Converts an owned result and frees it; on failure the exception goes to *out.
+   Order matters: the outermost call drains microtasks, unwraps a Promise result when asked and
+   reports rejections first, and only then writes *out. Anything that runs script after the write
+   (a job calling a host function that re-enters the engine) would let a nested finish overwrite
+   the shared output buffers. The call's own exception is taken before the drain so a failing job
+   cannot replace it; a toJSON that enqueues microtasks during the final conversion leaves them for
+   the next outermost call. */
 static int32_t finish(kmpjs_engine *e, int outermost, JSValue v, int32_t flags, int unwrap, kmpjs_value *out)
 {
     JSContext *ctx = e->ctx;
-    int failed = JS_IsException(v);
+    JSValue exc = JS_UNDEFINED;
+    int failed = 0, oom = 0;
 
-    if (failed)
-        exception_to_out(e, out);
+    if (JS_IsException(v)) {
+        failed = 1;
+        exc = take_exception(e, &oom);
+    }
     if (outermost && drain_jobs(e) < 0) {
         if (failed) {
             JS_FreeValue(ctx, JS_GetException(ctx));
         } else {
-            JS_FreeValue(ctx, v);
-            v = JS_EXCEPTION;
             failed = 1;
-            exception_to_out(e, out);
+            exc = take_exception(e, &oom);
+            JS_FreeValue(ctx, v);
+            v = JS_UNDEFINED;
         }
     }
     if (!failed && unwrap) {
         v = unwrap_promise(e, v, &flags);
         if (JS_IsException(v)) {
             failed = 1;
-            exception_to_out(e, out);
+            exc = take_exception(e, &oom);
         }
     }
     if (outermost)
         report_rejections(e);
-    if (!failed && value_to_out(e, v, &e->out_str, flags, out)) {
+    if (failed) {
+        if (oom)
+            oom_to_out(e, out);
+        else
+            error_to_out(e, exc, &e->out_str, &e->out_stack, out);
+    } else if (value_to_out(e, v, &e->out_str, flags, out)) {
         failed = 1;
         exception_to_out(e, out);
     }
@@ -966,19 +1000,14 @@ int32_t kmpjs_ref_set(kmpjs_engine *e, int64_t ref, const char *name, const kmpj
     JSContext *ctx = e->ctx;
     kmp_slot *s = slot_get(e, ref);
     JSValue v;
-    int outermost, rc = -1;
+    int outermost;
     if (!s)
         return fail_message(e, out, "invalid or released ref");
     outermost = run_begin(e);
     v = value_from_host(e, value);
-    if (JS_IsException(v) || JS_SetPropertyStr(ctx, s->val, name, v) < 0) {
-        exception_to_out(e, out);
-    } else {
-        memset(out, 0, sizeof(*out));
-        rc = 0;
-    }
-    run_end(e, outermost);
-    return rc;
+    if (JS_IsException(v) || JS_SetPropertyStr(ctx, s->val, name, v) < 0)
+        return finish(e, outermost, JS_EXCEPTION, 0, 0, out);
+    return finish(e, outermost, JS_UNDEFINED, 0, 0, out);
 }
 
 int32_t kmpjs_ref_call(kmpjs_engine *e, int64_t ref, int64_t this_ref, const kmpjs_value *args,
@@ -1036,13 +1065,8 @@ int32_t kmpjs_ref_to_json(kmpjs_engine *e, int64_t ref, kmpjs_value *out)
         return 0;
     outermost = run_begin(e);
     json = JS_JSONStringify(e->ctx, s->val, JS_UNDEFINED, JS_UNDEFINED);
-    if (JS_IsException(json) || (!JS_IsUndefined(json) && copy_js_string(e->ctx, json, &e->out_str))) {
-        exception_to_out(e, out);
-        rc = -1;
-    } else if (!JS_IsUndefined(json)) {
-        publish(&e->out_str, &out->str, &out->str_len);
-    }
-    JS_FreeValue(e->ctx, json);
-    run_end(e, outermost);
+    rc = finish(e, outermost, json, 0, 0, out);
+    if (rc == 0)
+        out->tag = KMPJS_TAG_OBJECT; /* the JSON text, or no payload when nothing is serializable */
     return rc;
 }

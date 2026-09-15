@@ -41,7 +41,7 @@ JsEngine(JsEngineConfig(memoryLimit = 8L * 1024 * 1024, logger = ::println)).use
 
 ### Promises and `async`
 
-Every outermost engine call drains the microtask queue before it returns, so `then` callbacks and `await` continuations run inside the same call. A Promise result is unwrapped: fulfilled gives its value, rejected throws `JsException`, still pending comes back as a `JsRef` with `isPromise` that settles during a later call.
+Every outermost engine call drains the microtask queue before it returns, so `then` callbacks and `await` continuations run inside the same call. A Promise result is unwrapped: fulfilled gives its value, rejected throws `JsException`, still pending comes back as a `JsRef` whose `isPromise` is true; the Promise itself may settle during a later call, the flag does not change.
 
 ```kotlin
 JsEngine(JsEngineConfig(onUnhandledRejection = { e -> println("lost: ${e.message}") })).use { engine ->
