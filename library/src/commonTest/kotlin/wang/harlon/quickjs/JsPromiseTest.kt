@@ -99,6 +99,21 @@ class JsPromiseTest {
     }
 
     @Test
+    fun workQueuedByToJsonDuringSerializationRunsInTheSameCall() {
+        val reported = ArrayList<String>()
+        JsEngine(JsEngineConfig(onUnhandledRejection = { reported += it.message.orEmpty() })).use { engine ->
+            engine.registerFunction("inner") { engine.evaluate("'nested'") }
+            assertEquals(
+                JsValue.Json("""{"a":1}"""),
+                engine.evaluate("var order = []; ({toJSON() { Promise.resolve().then(() => { inner(); order.push('fromToJSON'); }); return {a: 1}; }})"),
+            )
+            assertEquals(JsValue.Str("fromToJSON"), engine.evaluate("order.join()"))
+            assertEquals(JsValue.Json("1"), engine.evaluate("({toJSON() { Promise.reject(new Error('from toJSON')); return 1; }})"))
+        }
+        assertEquals(listOf("Error: from toJSON"), reported)
+    }
+
+    @Test
     fun scriptExceptionWinsOverJobFailures() = JsEngine().use { engine ->
         val e = assertFailsWith<JsException> { engine.evaluate("Promise.resolve().then(() => { throw new Error('in job'); }); null.x") }
         assertEquals("TypeError: cannot read property 'x' of null", e.message)

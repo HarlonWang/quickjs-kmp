@@ -136,6 +136,13 @@ static void test_promises(void)
     v = eval("Promise.resolve().then(() => nested()); null.x", 0);
     CHECK(v.tag == KMPJS_TAG_EXCEPTION && str_is(&v, "TypeError: cannot read property 'x' of null"));
     v = eval("Promise.resolve().then(() => nested()); 'kept'", 0); CHECK(str_is(&v, "kept"));
+    /* work queued by toJSON while the result is being serialized still runs inside this call */
+    v = eval("order = []; ({toJSON() { Promise.resolve().then(() => order.push('fromToJSON')); return {a: 1}; }})", 0);
+    CHECK(v.tag == KMPJS_TAG_OBJECT && str_is(&v, "{\"a\":1}"));
+    v = eval("order.join()", 0); CHECK(str_is(&v, "fromToJSON"));
+    v = eval("({toJSON() { Promise.reject(new Error('from toJSON')); return 1; }})", 0); CHECK(v.tag == KMPJS_TAG_OBJECT && str_is(&v, "1"));
+    CHECK(rejections == 1 && strcmp(last_rejection, "Error: from toJSON") == 0);
+    rejections = 0;
     /* settled promises are unwrapped, pending ones come back as refs */
     v = eval("(async () => { await null; return 6 * 7; })()", 0); CHECK(v.tag == KMPJS_TAG_NUMBER && v.num == 42);
     v = eval("(async () => { throw new Error('nope'); })()", 0); CHECK(v.tag == KMPJS_TAG_EXCEPTION && str_is(&v, "Error: nope"));

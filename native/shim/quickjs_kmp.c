@@ -831,9 +831,9 @@ static void oom_to_out(kmpjs_engine *e, kmpjs_value *out)
    Order matters: the outermost call drains microtasks, unwraps a Promise result when asked and
    reports rejections first, and only then writes *out. Anything that runs script after the write
    (a job calling a host function that re-enters the engine) would let a nested finish overwrite
-   the shared output buffers. The call's own exception is taken before the drain so a failing job
-   cannot replace it; a toJSON that enqueues microtasks during the final conversion leaves them for
-   the next outermost call. */
+   the shared output buffers, so when the final conversion itself queues work (a toJSON that
+   creates promises) the finished payload is set aside while that work runs. The call's own
+   exception is taken before the drain so a failing job cannot replace it. */
 static int32_t finish(kmpjs_engine *e, int outermost, JSValue v, int32_t flags, int unwrap, kmpjs_value *out)
 {
     JSContext *ctx = e->ctx;
@@ -871,6 +871,19 @@ static int32_t finish(kmpjs_engine *e, int outermost, JSValue v, int32_t flags, 
     } else if (value_to_out(e, v, &e->out_str, flags, out)) {
         failed = 1;
         exception_to_out(e, out);
+    } else if (outermost && (JS_IsJobPending(e->rt) || e->rejected_count > 0)) {
+        kmp_buf keep = e->out_str;
+        int rc;
+        memset(&e->out_str, 0, sizeof(e->out_str));
+        rc = drain_jobs(e);
+        buf_free(&e->out_str);
+        e->out_str = keep;
+        if (rc < 0) {
+            failed = 1;
+            exception_to_out(e, out);
+        } else {
+            report_rejections(e);
+        }
     }
     JS_FreeValue(ctx, v);
     run_end(e, outermost);
