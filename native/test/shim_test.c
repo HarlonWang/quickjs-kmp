@@ -260,6 +260,64 @@ static void test_modules(void)
     kmpjs_get_stats(g, &st); CHECK(st.live_refs == 0);
 }
 
+static void test_bytecode(void)
+{
+    static const char script[] = "var runs = (typeof runs === 'number' ? runs : 0) + 1; BigInt(report(runs) * 10) + 2n ** 64n % 7n";
+    static const char module[] = "import { bump } from 'counter'; export const url = import.meta.url; export default bump();";
+    kmpjs_value bc, mbc, v, out;
+    int64_t ns;
+    uint8_t *tampered;
+
+    CHECK(kmpjs_compile(S(script), "prog.js", 0, &bc) == 0 && bc.str_len > KMPJS_BYTECODE_HEADER_SIZE);
+    CHECK(kmpjs_compile(S("var x = ;"), "bad.js", 0, &v) != 0 && str_has(&v, "SyntaxError") && v.stack && str_has(&(kmpjs_value){.str = v.stack, .str_len = v.stack_len}, "bad.js"));
+    kmpjs_free((void *)v.str);
+    kmpjs_free((void *)v.stack);
+    /* a script runs any number of times and sees the global state */
+    CHECK(kmpjs_run_bytecode(g, (const uint8_t *)bc.str, bc.str_len, 0, &v) == 0 && v.tag == KMPJS_TAG_BIGINT && str_is(&v, "12"));
+    CHECK(kmpjs_run_bytecode(g, (const uint8_t *)bc.str, bc.str_len, 0, &v) == 0 && str_is(&v, "22"));
+    /* stripping shrinks the output; errors keep or lose their location accordingly */
+    CHECK(kmpjs_compile(S("function boom() { throw new Error('x'); } boom()"), "loc.js", 0, &v) == 0);
+    CHECK(kmpjs_compile(S("function boom() { throw new Error('x'); } boom()"), "loc.js", KMPJS_COMPILE_STRIP_DEBUG, &out) == 0 && out.str_len < v.str_len);
+    CHECK(kmpjs_run_bytecode(g, (const uint8_t *)v.str, v.str_len, 0, &mbc) != 0 && str_is(&mbc, "Error: x") && mbc.stack && str_has(&(kmpjs_value){.str = mbc.stack, .str_len = mbc.stack_len}, "loc.js:1"));
+    CHECK(kmpjs_run_bytecode(g, (const uint8_t *)out.str, out.str_len, 0, &mbc) != 0 && str_is(&mbc, "Error: x") && !(mbc.stack && str_has(&(kmpjs_value){.str = mbc.stack, .str_len = mbc.stack_len}, "loc.js:1")));
+    kmpjs_free((void *)v.str);
+    kmpjs_free((void *)out.str);
+    /* modules: registered from bytecode under their compiled name, or run directly */
+    CHECK(kmpjs_compile(S(module), "bc-page", KMPJS_COMPILE_MODULE, &mbc) == 0);
+    CHECK(kmpjs_register_module_bytecode(g, (const uint8_t *)bc.str, bc.str_len, &out) != 0 && str_has(&out, "not a module"));
+    CHECK(kmpjs_register_module_bytecode(g, (const uint8_t *)mbc.str, mbc.str_len, &out) == 0 && out.tag == KMPJS_TAG_STRING && str_is(&out, "bc-page"));
+    CHECK(kmpjs_register_module_bytecode(g, (const uint8_t *)mbc.str, mbc.str_len, &out) != 0 && str_has(&out, "already registered"));
+    CHECK(kmpjs_compile(S("export const anon = 1;"), "<module>", KMPJS_COMPILE_MODULE, &out) == 0);
+    CHECK(kmpjs_register_module_bytecode(g, (const uint8_t *)out.str, out.str_len, &v) != 0 && str_has(&v, "anonymous"));
+    kmpjs_free((void *)out.str);
+    CHECK(kmpjs_eval_module(g, S("import page, { url } from 'bc-page'; export const r = page + ':' + url;"), "<module>", 0, &v) == 0);
+    ns = v.ref;
+    CHECK(kmpjs_ref_get(g, ns, "r", 0, &v) == 0 && str_has(&v, ":test:bc-page"));
+    kmpjs_ref_release(g, ns);
+    kmpjs_free((void *)mbc.str);
+    CHECK(kmpjs_compile(S("import { bump } from 'counter'; export const n = bump();"), "bc-direct", KMPJS_COMPILE_MODULE, &mbc) == 0);
+    CHECK(kmpjs_run_bytecode(g, (const uint8_t *)mbc.str, mbc.str_len, 0, &v) == 0 && v.tag == KMPJS_TAG_REF);
+    ns = v.ref;
+    CHECK(kmpjs_ref_get(g, ns, "n", 0, &v) == 0 && v.tag == KMPJS_TAG_NUMBER);
+    kmpjs_ref_release(g, ns);
+    CHECK(kmpjs_run_bytecode(g, (const uint8_t *)mbc.str, mbc.str_len, 0, &v) != 0 && str_has(&v, "already evaluated"));
+    CHECK(kmpjs_compile(S("import 'nowhere';"), "bc-missing", KMPJS_COMPILE_MODULE, &out) == 0);
+    CHECK(kmpjs_run_bytecode(g, (const uint8_t *)out.str, out.str_len, 0, &v) != 0 && str_has(&v, "'nowhere' is not registered"));
+    kmpjs_free((void *)out.str);
+    kmpjs_free((void *)mbc.str);
+    /* the header binds the bytes to this engine build */
+    CHECK(kmpjs_run_bytecode(g, (const uint8_t *)"garbage", 7, 0, &v) != 0 && str_has(&v, "not QuickJS bytecode"));
+    tampered = malloc((size_t)bc.str_len);
+    memcpy(tampered, bc.str, (size_t)bc.str_len);
+    memcpy(tampered + 12, "0000000000", 10);
+    CHECK(kmpjs_run_bytecode(g, tampered, bc.str_len, 0, &v) != 0 && str_has(&v, "built for engine 0000"));
+    memcpy(tampered, bc.str, (size_t)bc.str_len);
+    tampered[8] = 1; /* claims to be a module */
+    CHECK(kmpjs_run_bytecode(g, tampered, bc.str_len, 0, &v) != 0 && str_has(&v, "does not match its header"));
+    free(tampered);
+    kmpjs_free((void *)bc.str);
+}
+
 static void test_values(void)
 {
     kmpjs_value v;
@@ -406,6 +464,7 @@ int main(void)
     test_promises();
     test_bigint_and_binary();
     test_modules();
+    test_bytecode();
     /* destroy with refs still open must be clean */
     v = eval("({leak: 1})", KMPJS_FLAG_REF_OBJECTS); CHECK(v.tag == KMPJS_TAG_REF);
     kmpjs_destroy(g);

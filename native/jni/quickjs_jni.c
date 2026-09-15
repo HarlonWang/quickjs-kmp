@@ -340,6 +340,66 @@ Java_wang_harlon_quickjs_NativeBridge_nativeEvalModule(JNIEnv *env, jclass cls, 
     return res;
 }
 
+/* ---- bytecode ---- */
+
+/* Returns a byte[] with the bytecode, or a NativeValue carrying the error. */
+JNIEXPORT jobject JNICALL
+Java_wang_harlon_quickjs_NativeBridge_nativeCompile(JNIEnv *env, jclass cls, jbyteArray code,
+                                                    jbyteArray filename, jint flags)
+{
+    kmpjs_value out;
+    char *code_buf = dup_cstring(env, code);
+    char *name_buf = dup_cstring(env, filename);
+    jobject res;
+
+    if (!code_buf || !name_buf) {
+        free(code_buf);
+        free(name_buf);
+        return NULL;
+    }
+    if (kmpjs_compile(code_buf, (*env)->GetArrayLength(env, code), name_buf, flags, &out) == 0)
+        res = new_bytes(env, out.str, out.str_len);
+    else
+        res = new_value(env, &out);
+    kmpjs_free((void *)out.str);
+    kmpjs_free((void *)out.stack);
+    free(code_buf);
+    free(name_buf);
+    return res;
+}
+
+JNIEXPORT jobject JNICALL
+Java_wang_harlon_quickjs_NativeBridge_nativeRunBytecode(JNIEnv *env, jclass cls, jlong ptr, jbyteArray bytes, jint flags)
+{
+    kmpjs_value out;
+    jsize len = (*env)->GetArrayLength(env, bytes);
+    uint8_t *buf = malloc((size_t)len + 1);
+    jobject res;
+    if (!buf)
+        return NULL;
+    (*env)->GetByteArrayRegion(env, bytes, 0, len, (jbyte *)buf);
+    kmpjs_run_bytecode((kmpjs_engine *)(intptr_t)ptr, buf, len, flags, &out);
+    res = new_value(env, &out);
+    free(buf);
+    return res;
+}
+
+JNIEXPORT jobject JNICALL
+Java_wang_harlon_quickjs_NativeBridge_nativeRegisterModuleBytecode(JNIEnv *env, jclass cls, jlong ptr, jbyteArray bytes)
+{
+    kmpjs_value out;
+    jsize len = (*env)->GetArrayLength(env, bytes);
+    uint8_t *buf = malloc((size_t)len + 1);
+    jobject res;
+    if (!buf)
+        return NULL;
+    (*env)->GetByteArrayRegion(env, bytes, 0, len, (jbyte *)buf);
+    kmpjs_register_module_bytecode((kmpjs_engine *)(intptr_t)ptr, buf, len, &out);
+    res = new_value(env, &out);
+    free(buf);
+    return res;
+}
+
 /* ---- refs ---- */
 
 JNIEXPORT void JNICALL

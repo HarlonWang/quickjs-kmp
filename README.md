@@ -70,6 +70,21 @@ JsEngine(JsEngineConfig(moduleScheme = "app")).use { engine ->
 
 `evaluateModule` returns the namespace as a `JsRef`, and the module can be imported by its name afterwards. A registered module is compiled at its first import and runs once; registered and evaluated names share one namespace, so claiming a name twice throws (names in angle brackets, like the default, are anonymous). Top-level `await` is supported: a module still pending when the call returns comes back as a `JsRef` with `isPromise`. Each `evaluateModule` call leaves the compiled module in the engine for its lifetime.
 
+### Precompiled bytecode
+
+`JsBytecode.compile` turns a script or module into engine bytecode without an engine; `runBytecode` runs it any number of times, and a compiled module can be registered by the name it was compiled with. Bytecode is bound to the engine build of the SDK that produced it (`QuickJs.upstreamCommit`) and is otherwise portable across architectures; a mismatch is rejected with a clear `JsException`. Nothing else about the bytes is validated, so only load what this SDK compiled.
+
+```kotlin
+val page = JsBytecode.compile(pageSource, "pages/list", module = true, strip = JsBytecode.Strip.SOURCE)  // at build time, or once on device
+JsEngine().use { engine ->
+    engine.registerModule(JsBytecode.compile(coreSource, "@tiny-ui/core", module = true)) // returns "@tiny-ui/core"
+    (engine.runBytecode(page) as JsRef).use { ns -> ns.get("default", ObjectTransport.REF) }
+    engine.runBytecode(JsBytecode.compile("1 + 1"))                                       // JsValue.Num(2.0)
+}
+```
+
+`Strip.SOURCE` drops the source text and keeps line numbers in stack traces; `Strip.DEBUG` drops all debug information.
+
 ### Holding JS objects: `JsRef`
 
 Ask for `ObjectTransport.REF` and objects come back as live handles instead of JSON. A `JsRef` reads and writes properties, indexes arrays, calls functions with a `this` and arguments, and must be closed: the object stays alive in the engine until then.

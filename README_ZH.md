@@ -70,6 +70,21 @@ JsEngine(JsEngineConfig(moduleScheme = "app")).use { engine ->
 
 `evaluateModule` 以 `JsRef` 返回 namespace，之后该模块可以按名字被 import。注册的模块在第一次 import 时编译、只执行一次；注册名与求值名共用一个命名空间，任何名字占用两次都会抛异常（尖括号形式的名字如默认的 `<module>` 视为匿名）。支持顶层 `await`：调用返回时仍未完成的模块以带 `isPromise` 的 `JsRef` 返回。每次 `evaluateModule` 都会把编译后的模块留在引擎里直到引擎关闭。
 
+### 预编译字节码
+
+`JsBytecode.compile` 不需要引擎就能把脚本或模块编成字节码；`runBytecode` 可以反复执行它，编译好的模块按编译时的名字注册。字节码绑定到编出它的 SDK 所内嵌的引擎版本（`QuickJs.upstreamCommit`），除此之外跨架构通用；不匹配时以明确的 `JsException` 拒绝。其余内容不做校验，只加载本 SDK 编出来的字节码。
+
+```kotlin
+val page = JsBytecode.compile(pageSource, "pages/list", module = true, strip = JsBytecode.Strip.SOURCE)  // 构建期，或设备上编一次缓存
+JsEngine().use { engine ->
+    engine.registerModule(JsBytecode.compile(coreSource, "@tiny-ui/core", module = true)) // 返回 "@tiny-ui/core"
+    (engine.runBytecode(page) as JsRef).use { ns -> ns.get("default", ObjectTransport.REF) }
+    engine.runBytecode(JsBytecode.compile("1 + 1"))                                       // JsValue.Num(2.0)
+}
+```
+
+`Strip.SOURCE` 去掉源码文本、栈里保留行号；`Strip.DEBUG` 去掉全部调试信息。
+
 ### 持有 JS 对象：`JsRef`
 
 指定 `ObjectTransport.REF`，对象就以句柄而非 JSON 返回。`JsRef` 可以读写属性、按下标访问数组、带 `this` 与参数调用函数，用完必须 close：在此之前对象一直活在引擎里。

@@ -23,7 +23,7 @@
 
 ## M3 字节码、工具与发布
 
-- 脚本与模块字节码：`JsBytecode.compile`（script / module 两种模式、`strip` 三档）、文件头（magic + commit，无字长）、`JsEngine.loadBytecode` / `registerModule(bytecode)`；同一份字节码在 arm64 与 armeabi-v7a 上加载的用例
+- ~~脚本与模块字节码：`JsBytecode.compile`（script / module 两种模式、`strip` 三档）、文件头（magic + commit，无字长）、`JsEngine.runBytecode` / `registerModule(bytecode)`；跨架构用例（固定样本在 macOS arm64 编出，任何架构加载）~~ 已完成
 - 宿主工具 `qjsc-kmp`（`buildHostTools`）
 - ASan 冒烟挂 check / CI；build.yml / publish.yml；BCV klib dump
 - 发 `wang.harlon:quickjs-kmp:0.1.0`
