@@ -25,6 +25,8 @@ commonMain      JsEngine / JsValue / JsRef / JsRuntime / JsException（expect �
 
 **引擎 close 有固定顺序。** `JS_FreeRuntime` 断言 GC 对象链表为空，三端构建不定义 `NDEBUG`，shim 里任何一个没 free 的 `JSValue` 都会让 close 直接 abort。顺序是：释放全部 slot → `JS_FreeContext` → `JS_FreeRuntime`。C 测试的最后一步就是带着未释放的 ref 销毁引擎。
 
+**微任务在最外层调用返回前排空。** `run_begin` 判定的最外层入口在主体执行完后循环 `JS_ExecutePendingJob`，随后解包 Promise 结果、上报本次调用里未处理的 rejection，再把结果转成 `kmpjs_value`。调用主体自己的异常先于排空捕获，job 抛出的不可捕获异常（中断、OOM）才会取代结果。排空被打断时剩余 job 会被丢弃（临时 1 字节栈限额跑空队列），引擎因此不会被无限链拖死。rejection 经 `JS_SetHostPromiseRejectionTracker` 记入清单，同一 tick 里后来挂上 handler 的会被引擎再次通知并从清单移除，所以清单只在排空之后判定。
+
 **引擎核心没有 `console`。** `console.log`、`print`、`performance.now` 由 shim 挂到全局对象上（`quickjs-libc` 不链接），`console.log` 走 `JsEngineConfig.logger`，非字符串参数用引擎的 `JS_PrintValue` 格式化。
 
 ## 运行时约束

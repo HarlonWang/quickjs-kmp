@@ -96,7 +96,7 @@ final class wang.harlon.quickjs/JsEngine : kotlin/AutoCloseable { // wang.harlon
 }
 
 final class wang.harlon.quickjs/JsEngineConfig { // wang.harlon.quickjs/JsEngineConfig|null[0]
-    constructor <init>(kotlin/Long = ..., kotlin/Long = ..., kotlin/Long = ..., kotlin/Function1<kotlin/String, kotlin/Unit>? = ...) // wang.harlon.quickjs/JsEngineConfig.<init>|<init>(kotlin.Long;kotlin.Long;kotlin.Long;kotlin.Function1<kotlin.String,kotlin.Unit>?){}[0]
+    constructor <init>(kotlin/Long = ..., kotlin/Long = ..., kotlin/Long = ..., kotlin/Function1<kotlin/String, kotlin/Unit>? = ..., kotlin/Function1<wang.harlon.quickjs/JsException, kotlin/Unit>? = ...) // wang.harlon.quickjs/JsEngineConfig.<init>|<init>(kotlin.Long;kotlin.Long;kotlin.Long;kotlin.Function1<kotlin.String,kotlin.Unit>?;kotlin.Function1<wang.harlon.quickjs.JsException,kotlin.Unit>?){}[0]
 
     final val gcThreshold // wang.harlon.quickjs/JsEngineConfig.gcThreshold|{}gcThreshold[0]
         final fun <get-gcThreshold>(): kotlin/Long // wang.harlon.quickjs/JsEngineConfig.gcThreshold.<get-gcThreshold>|<get-gcThreshold>(){}[0]
@@ -106,6 +106,8 @@ final class wang.harlon.quickjs/JsEngineConfig { // wang.harlon.quickjs/JsEngine
         final fun <get-maxStackSize>(): kotlin/Long // wang.harlon.quickjs/JsEngineConfig.maxStackSize.<get-maxStackSize>|<get-maxStackSize>(){}[0]
     final val memoryLimit // wang.harlon.quickjs/JsEngineConfig.memoryLimit|{}memoryLimit[0]
         final fun <get-memoryLimit>(): kotlin/Long // wang.harlon.quickjs/JsEngineConfig.memoryLimit.<get-memoryLimit>|<get-memoryLimit>(){}[0]
+    final val onUnhandledRejection // wang.harlon.quickjs/JsEngineConfig.onUnhandledRejection|{}onUnhandledRejection[0]
+        final fun <get-onUnhandledRejection>(): kotlin/Function1<wang.harlon.quickjs/JsException, kotlin/Unit>? // wang.harlon.quickjs/JsEngineConfig.onUnhandledRejection.<get-onUnhandledRejection>|<get-onUnhandledRejection>(){}[0]
 
     final object Companion { // wang.harlon.quickjs/JsEngineConfig.Companion|null[0]
         final const val DEFAULT_MAX_STACK_SIZE // wang.harlon.quickjs/JsEngineConfig.Companion.DEFAULT_MAX_STACK_SIZE|{}DEFAULT_MAX_STACK_SIZE[0]
@@ -136,6 +138,8 @@ final class wang.harlon.quickjs/JsRef : kotlin/AutoCloseable, wang.harlon.quickj
         final fun <get-isArray>(): kotlin/Boolean // wang.harlon.quickjs/JsRef.isArray.<get-isArray>|<get-isArray>(){}[0]
     final val isFunction // wang.harlon.quickjs/JsRef.isFunction|{}isFunction[0]
         final fun <get-isFunction>(): kotlin/Boolean // wang.harlon.quickjs/JsRef.isFunction.<get-isFunction>|<get-isFunction>(){}[0]
+    final val isPromise // wang.harlon.quickjs/JsRef.isPromise|{}isPromise[0]
+        final fun <get-isPromise>(): kotlin/Boolean // wang.harlon.quickjs/JsRef.isPromise.<get-isPromise>|<get-isPromise>(){}[0]
     final val isValid // wang.harlon.quickjs/JsRef.isValid|{}isValid[0]
         final fun <get-isValid>(): kotlin/Boolean // wang.harlon.quickjs/JsRef.isValid.<get-isValid>|<get-isValid>(){}[0]
 

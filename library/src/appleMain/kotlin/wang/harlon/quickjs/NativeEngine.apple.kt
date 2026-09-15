@@ -54,7 +54,7 @@ internal actual class NativeEngine actual constructor(config: JsEngineConfig, in
             cfg.memory_limit = config.memoryLimit
             cfg.max_stack_size = config.maxStackSize
             cfg.gc_threshold = config.gcThreshold
-            kmpjs_create(cfg.ptr, ref.asCPointer(), hostCallback, logCallback)
+            kmpjs_create(cfg.ptr, ref.asCPointer(), hostCallback, logCallback, rejectionCallback)
         }
         if (engine == null) {
             ref.dispose()
@@ -176,6 +176,14 @@ internal actual class NativeEngine actual constructor(config: JsEngineConfig, in
                 val engine = user!!.asStableRef<NativeEngine>().get()
                 val text = if (msg == null || len <= 0) "" else Wtf8.decode(msg.readBytes(len))
                 engine.host.onLog(text)
+            } catch (_: Throwable) {
+            }
+        }
+
+        val rejectionCallback = staticCFunction { user: COpaquePointer?, reason: CPointer<kmpjs_value>? ->
+            try {
+                val engine = user!!.asStableRef<NativeEngine>().get()
+                engine.host.onUnhandledRejection(reason!!.pointed.toRaw())
             } catch (_: Throwable) {
             }
         }
