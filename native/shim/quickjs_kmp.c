@@ -43,7 +43,7 @@ typedef struct {
 /* One row per module name the engine knows: registered (source kept until the first import) or
    evaluated directly (source NULL). Both live in the context's module cache once loaded, so the
    two kinds share one namespace and a name can only be claimed once. */
-enum { KMP_MODULE_SOURCE = 0, KMP_MODULE_BYTECODE = 1, KMP_MODULE_EVALUATED = 2 };
+enum { KMP_MODULE_SOURCE = 0, KMP_MODULE_BYTECODE = 1, KMP_MODULE_EVALUATED = 2, KMP_MODULE_LOADED = 3 };
 
 typedef struct {
     char *name;
@@ -59,6 +59,7 @@ struct kmpjs_engine {
     kmpjs_host_fn host;
     kmpjs_log_fn log;
     kmpjs_rejection_fn rejection;
+    kmpjs_module_fn module_loader;
     size_t max_stack_size;
     int64_t memory_limit; /* as configured; the engine stores "unlimited" as (size_t)-1, which differs per word size */
     JSClassID cls_array_buffer;
@@ -139,6 +140,9 @@ int32_t kmpjs_abi_version(void)
 
 static int32_t fail_message(kmpjs_engine *e, kmpjs_value *out, const char *msg);
 static void exception_to_out(kmpjs_engine *e, kmpjs_value *out);
+static JSValue throw_message(JSContext *ctx, const char *p, int32_t len);
+static int32_t claim_module_name(kmpjs_engine *e, const char *name, int kind, const char *code, int32_t code_len, kmpjs_value *out);
+static JSValue module_from_bytecode(kmpjs_engine *e, const char *name, const uint8_t *buf, int32_t len);
 static char *terminated_copy(const char *p, int32_t len);
 
 /* ---- allocator: the engine's default one plus a flag for refused allocations ----
@@ -382,18 +386,59 @@ static char *kmp_module_normalize(JSContext *ctx, const char *base, const char *
     return js_strdup(ctx, name);
 }
 
+/* Asks the host for a module the table does not know. The result is a compiled module value with
+   import.meta set (or JS_EXCEPTION with the exception pending). */
+static JSValue module_from_host(kmpjs_engine *e, const char *name)
+{
+    JSContext *ctx = e->ctx;
+    kmpjs_value res;
+    JSValue obj = JS_EXCEPTION;
+    char *buf;
+
+    memset(&res, 0, sizeof(res));
+    if (e->module_loader(e->user, name, (int32_t)strlen(name), &res) != 0) {
+        throw_message(ctx, res.str, res.str_len);
+    } else if (res.tag == KMPJS_TAG_STRING) {
+        buf = terminated_copy(res.str, res.str_len);
+        if (buf) {
+            obj = compile_module(e, buf, (size_t)res.str_len, name);
+            free(buf);
+        } else {
+            JS_ThrowOutOfMemory(ctx);
+        }
+    } else if (res.tag == KMPJS_TAG_BINARY) {
+        obj = module_from_bytecode(e, name, (const uint8_t *)res.str, res.str_len);
+    } else if (res.tag == KMPJS_TAG_UNDEFINED || res.tag == KMPJS_TAG_NULL) {
+        JS_ThrowReferenceError(ctx, "module '%s' is not registered", name);
+    } else {
+        JS_ThrowTypeError(ctx, "module loader returned neither source nor bytecode for '%s'", name);
+    }
+    kmpjs_free((void *)res.str);
+    kmpjs_free((void *)res.stack);
+    return obj;
+}
+
 static JSModuleDef *kmp_module_loader(JSContext *ctx, const char *name, void *opaque)
 {
     kmpjs_engine *e = opaque;
     kmp_module *mod = find_module(e, name);
+    kmpjs_value err;
     JSValue obj;
     JSModuleDef *m;
 
-    if (!mod || !mod->source) {
+    if (mod && mod->source) {
+        obj = compile_module(e, mod->source, mod->len, name);
+    } else if (!mod && e->module_loader) {
+        obj = module_from_host(e, name);
+        /* the context caches it under this name from here on, so the name is spent */
+        if (!JS_IsException(obj) && claim_module_name(e, name, KMP_MODULE_LOADED, NULL, 0, &err)) {
+            JS_FreeValue(ctx, obj);
+            obj = throw_message(ctx, err.str, err.str_len);
+        }
+    } else {
         JS_ThrowReferenceError(ctx, "module '%s' is not registered", name);
         return NULL;
     }
-    obj = compile_module(e, mod->source, mod->len, name);
     if (JS_IsException(obj))
         return NULL;
     /* the context keeps the module in its loaded list; the value itself is not needed */
@@ -611,6 +656,41 @@ static char *peek_module_name(kmpjs_engine *e, const uint8_t *body, size_t body_
     }
     JS_FreeContext(scratch);
     return copy;
+}
+
+/* Loader-supplied bytecode: the header and the compiled name are checked before the module enters
+   the context, for the same reason kmpjs_register_module_bytecode peeks at the name first. */
+static JSValue module_from_bytecode(kmpjs_engine *e, const char *name, const uint8_t *buf, int32_t len)
+{
+    JSContext *ctx = e->ctx;
+    kmpjs_value err;
+    int kind;
+    const uint8_t *body;
+    size_t body_len;
+    char *compiled;
+    JSValue obj;
+
+    if (check_bytecode_header(e, buf, len, &kind, &body, &body_len, &err))
+        return throw_message(ctx, err.str, err.str_len);
+    if (kind != 1)
+        return JS_ThrowTypeError(ctx, "module '%s': bytecode is a script, not a module", name);
+    compiled = peek_module_name(e, body, body_len, &err);
+    if (!compiled)
+        return throw_message(ctx, err.str, err.str_len);
+    if (strcmp(compiled, name) != 0) {
+        JS_ThrowTypeError(ctx, "module '%s': bytecode was compiled as '%s'", name, compiled);
+        free(compiled);
+        return JS_EXCEPTION;
+    }
+    free(compiled);
+    obj = read_bytecode_body(e, body, body_len, kind, &err);
+    if (JS_IsException(obj))
+        return throw_message(ctx, err.str, err.str_len);
+    if (set_import_meta(e, JS_VALUE_GET_PTR(obj), name)) {
+        JS_FreeValue(ctx, obj);
+        return JS_EXCEPTION;
+    }
+    return obj;
 }
 
 /* ---- interrupt state ---- */
@@ -859,7 +939,7 @@ void kmpjs_dump_memory(kmpjs_engine *e, kmpjs_value *out)
 /* ---- engine lifecycle ---- */
 
 kmpjs_engine *kmpjs_create(const kmpjs_config *config, void *user, kmpjs_host_fn host, kmpjs_log_fn log,
-                           kmpjs_rejection_fn rejection)
+                           kmpjs_rejection_fn rejection, kmpjs_module_fn module_loader)
 {
     kmpjs_engine *e = calloc(1, sizeof(*e));
     if (!e)
@@ -870,6 +950,7 @@ kmpjs_engine *kmpjs_create(const kmpjs_config *config, void *user, kmpjs_host_fn
     e->host = host;
     e->log = log;
     e->rejection = rejection;
+    e->module_loader = module_loader;
     e->max_stack_size = (size_t)config->max_stack_size;
     e->memory_limit = config->memory_limit > 0 ? config->memory_limit : 0;
     e->module_scheme = strdup(config->module_scheme && config->module_scheme[0] ? config->module_scheme : "kmp");
@@ -1348,7 +1429,9 @@ static int32_t module_name_taken(kmpjs_engine *e, const char *name, kmpjs_value 
     char msg[192];
     if (!mod)
         return 0;
-    snprintf(msg, sizeof msg, mod->kind == KMP_MODULE_EVALUATED ? "module '%.128s' was already evaluated" : "module '%.128s' is already registered", name);
+    snprintf(msg, sizeof msg, mod->kind == KMP_MODULE_EVALUATED ? "module '%.128s' was already evaluated"
+                              : mod->kind == KMP_MODULE_LOADED ? "module '%.128s' was already loaded by the module loader"
+                              : "module '%.128s' is already registered", name);
     return fail_message(e, out, msg);
 }
 

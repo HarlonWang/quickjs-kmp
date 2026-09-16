@@ -11,6 +11,12 @@ package wang.harlon.quickjs
  * unhandled when that call returns; when null the rejection goes to [logger] as one line. Exceptions
  * it throws are swallowed.
  * @property moduleScheme prefix of `import.meta.url`, which reads `<moduleScheme>:<module name>`.
+ * @property moduleLoader asked for a module no [JsEngine.registerModule] call has claimed, at its
+ * first import (static or dynamic `import()`), on the thread running the engine and inside the
+ * importing call. A module it returns is cached under that name and never asked again; null
+ * ("unknown", the import throws `ReferenceError`) or an exception (reaching the importer as an
+ * `Error`) spends nothing, so the next import of that name asks again. It must not call the
+ * engine; download ahead of time and serve from a cache here.
  */
 class JsEngineConfig(
     val memoryLimit: Long = 0,
@@ -19,6 +25,7 @@ class JsEngineConfig(
     val logger: ((String) -> Unit)? = null,
     val onUnhandledRejection: ((JsException) -> Unit)? = null,
     val moduleScheme: String = "kmp",
+    val moduleLoader: ((name: String) -> JsModuleSource?)? = null,
 ) {
     init {
         require(memoryLimit >= 0) { "memoryLimit must not be negative" }

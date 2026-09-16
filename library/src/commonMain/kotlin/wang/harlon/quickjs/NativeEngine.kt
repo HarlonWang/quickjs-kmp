@@ -4,6 +4,8 @@ internal interface HostCallbacks {
     fun onHostCall(id: Int, args: List<RawValue>): RawValue
     fun onLog(message: String)
     fun onUnhandledRejection(reason: RawValue)
+    /** STRING = source, BINARY = bytecode, UNDEFINED = unknown, EXCEPTION = loader failure. */
+    fun onLoadModule(name: String): RawValue
 }
 
 /** Mirror of `kmpjs_value` (native/shim/quickjs_kmp.h); the only shape that crosses the native boundary. */

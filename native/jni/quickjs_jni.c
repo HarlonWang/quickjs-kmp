@@ -12,6 +12,7 @@ static jclass g_bridge;
 static jmethodID g_on_host_call;
 static jmethodID g_on_log;
 static jmethodID g_on_rejection;
+static jmethodID g_on_load_module;
 static jclass g_value;
 static jmethodID g_value_ctor;
 static jfieldID g_f_tag, g_f_ref, g_f_num, g_f_str, g_f_stack;
@@ -38,6 +39,8 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved)
     g_on_log = (*env)->GetStaticMethodID(env, g_bridge, "onLog", "(Ljava/lang/Object;[B)V");
     g_on_rejection = (*env)->GetStaticMethodID(env, g_bridge, "onUnhandledRejection",
         "(Ljava/lang/Object;L" VALUE_CLASS ";)V");
+    g_on_load_module = (*env)->GetStaticMethodID(env, g_bridge, "onLoadModule",
+        "(Ljava/lang/Object;[B)L" VALUE_CLASS ";");
 
     cls = (*env)->FindClass(env, VALUE_CLASS);
     if (!cls)
@@ -50,7 +53,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved)
     g_f_str = (*env)->GetFieldID(env, g_value, "str", "[B");
     g_f_stack = (*env)->GetFieldID(env, g_value, "stack", "[B");
 
-    if (!g_on_host_call || !g_on_log || !g_on_rejection || !g_value_ctor || !g_f_tag || !g_f_ref || !g_f_num || !g_f_str || !g_f_stack)
+    if (!g_on_host_call || !g_on_log || !g_on_rejection || !g_on_load_module || !g_value_ctor || !g_f_tag || !g_f_ref || !g_f_num || !g_f_str || !g_f_stack)
         return JNI_ERR;
     return JNI_VERSION_1_6;
 }
@@ -202,6 +205,28 @@ static void jni_rejection(void *user, const kmpjs_value *reason)
     (*env)->PopLocalFrame(env, NULL);
 }
 
+static int jni_load_module(void *user, const char *name, int32_t len, kmpjs_value *result)
+{
+    JNIEnv *env = current_env();
+    jni_user *u = user;
+    jobject res;
+
+    if (!env || (*env)->PushLocalFrame(env, 8) != 0) {
+        set_error(result, "JNI local frame unavailable");
+        return 1;
+    }
+    res = (*env)->CallStaticObjectMethod(env, g_bridge, g_on_load_module, u->target, new_bytes(env, name, len));
+    if ((*env)->ExceptionCheck(env)) {
+        (*env)->ExceptionClear(env);
+        (*env)->PopLocalFrame(env, NULL);
+        set_error(result, "uncaught exception in module loader");
+        return 1;
+    }
+    read_value(env, res, result);
+    (*env)->PopLocalFrame(env, NULL);
+    return result->tag == KMPJS_TAG_EXCEPTION;
+}
+
 JNIEXPORT jint JNICALL
 Java_wang_harlon_quickjs_NativeBridge_nativeAbiVersion(JNIEnv *env, jclass cls)
 {
@@ -211,7 +236,8 @@ Java_wang_harlon_quickjs_NativeBridge_nativeAbiVersion(JNIEnv *env, jclass cls)
 JNIEXPORT jlong JNICALL
 Java_wang_harlon_quickjs_NativeBridge_nativeCreate(JNIEnv *env, jclass cls, jlong memory_limit,
                                                    jlong max_stack_size, jlong gc_threshold,
-                                                   jbyteArray module_scheme, jobject target)
+                                                   jbyteArray module_scheme, jboolean has_module_loader,
+                                                   jobject target)
 {
     jni_user *u = calloc(1, sizeof(*u));
     char *scheme = dup_cstring(env, module_scheme);
@@ -223,7 +249,7 @@ Java_wang_harlon_quickjs_NativeBridge_nativeCreate(JNIEnv *env, jclass cls, jlon
         return 0;
     }
     u->target = (*env)->NewGlobalRef(env, target);
-    e = kmpjs_create(&cfg, u, jni_host, jni_log, jni_rejection);
+    e = kmpjs_create(&cfg, u, jni_host, jni_log, jni_rejection, has_module_loader ? jni_load_module : NULL);
     free(scheme);
     if (!e) {
         (*env)->DeleteGlobalRef(env, u->target);

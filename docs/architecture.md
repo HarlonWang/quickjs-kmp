@@ -27,7 +27,7 @@ commonMain      JsEngine / JsValue / JsRef / JsRuntime / JsException（expect �
 
 **微任务在最外层调用返回前排空。** `run_begin` 判定的最外层入口在主体执行完后循环 `JS_ExecutePendingJob`，随后解包 Promise 结果、上报本次调用里未处理的 rejection，再把结果转成 `kmpjs_value`。调用主体自己的异常先于排空捕获，job 抛出的不可捕获异常（中断、OOM）才会取代结果。排空被打断时剩余 job 会被丢弃（临时 1 字节栈限额跑空队列），引擎因此不会被无限链拖死。rejection 经 `JS_SetHostPromiseRejectionTracker` 记入清单，同一 tick 里后来挂上 handler 的会被引擎再次通知并从清单移除，所以清单只在排空之后判定。
 
-**模块只认名字表。** `registerModule` 存源码，`JS_SetModuleLoaderFunc` 的 loader 在第一次 import 时查表编译并设 `import.meta.url`，normalize 原样返回说明符。`evaluateModule` 先 COMPILE_ONLY 记下 `JSModuleDef*` 再 `JS_EvalFunction`，得到的 Promise 走 `finish` 的排空与解包，fulfilled 时用记下的 `JSModuleDef*` 取 namespace 代替 Promise 的值。
+**模块只认名字。** `registerModule` 存源码，`JS_SetModuleLoaderFunc` 的 loader 在第一次 import 时查表编译并设 `import.meta.url`，normalize 原样返回说明符。表里没有的名字交给 `kmpjs_module_fn`（`JsEngineConfig.moduleLoader`）同步取源码或字节码，取到的模块同样占名进表；字节码先在裸 context 里核对编译名等于请求名再读进引擎，理由同 `registerModule(bytecode)`。`evaluateModule` 先 COMPILE_ONLY 记下 `JSModuleDef*` 再 `JS_EvalFunction`，得到的 Promise 走 `finish` 的排空与解包，fulfilled 时用记下的 `JSModuleDef*` 取 namespace 代替 Promise 的值。
 
 **字节码是引擎序列化加一个头。** `kmpjs_compile` 在临时 Runtime 里 `JS_Eval(COMPILE_ONLY)` 再 `JS_WriteObject`，前置 52 字节头（magic、种类、上游 commit）；`kmpjs_run_bytecode` 核对头后 `JS_ReadObject`，脚本直接 `JS_EvalFunction`，模块先 `JS_ResolveModule` 再走与 `kmpjs_eval_module` 相同的收尾。字节码模块按编译时的名字注册；名字先在裸 context 里读出来做查重，再读进引擎，因为读入引擎即入缓存、无法撤销。
 
