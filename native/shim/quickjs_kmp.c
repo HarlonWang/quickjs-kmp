@@ -641,8 +641,16 @@ static char *peek_module_name(kmpjs_engine *e, const uint8_t *body, size_t body_
     }
     obj = JS_ReadObject(scratch, body, body_len, JS_READ_OBJ_BYTECODE);
     if (JS_IsException(obj)) {
-        JS_FreeValue(scratch, JS_GetException(scratch));
-        fail_message(e, out, "bytecode body is corrupt");
+        /* the bare context cannot stringify an Error, so read its message property directly */
+        JSValue ex = JS_GetException(scratch);
+        JSValue msg = JS_GetPropertyStr(scratch, ex, "message");
+        const char *text = JS_IsString(msg) ? JS_ToCString(scratch, msg) : NULL;
+        char buf[256];
+        snprintf(buf, sizeof buf, "bytecode body is corrupt: %s", text ? text : "(no message)");
+        if (text) JS_FreeCString(scratch, text);
+        JS_FreeValue(scratch, msg);
+        JS_FreeValue(scratch, ex);
+        fail_message(e, out, buf);
     } else if (JS_VALUE_GET_TAG(obj) != JS_TAG_MODULE) {
         JS_FreeValue(scratch, obj);
         fail_message(e, out, "bytecode body does not match its header");
@@ -1559,14 +1567,19 @@ int32_t kmpjs_register_module_bytecode(kmpjs_engine *e, const uint8_t *buf, int3
     char *name;
     JSValue obj;
     int32_t rc = -1;
+    int outermost;
 
     if (check_bytecode_header(e, buf, len, &kind, &body, &body_len, out))
         return -1;
     if (kind != 1)
         return fail_message(e, out, "bytecode is a script, not a module");
+    /* JS_ReadObject recurses and checks the stack: the limit must come from this thread */
+    outermost = run_begin(e);
     name = peek_module_name(e, body, body_len, out);
-    if (!name)
+    if (!name) {
+        run_end(e, outermost);
         return -1;
+    }
     if (name[0] == '<' || !name[0]) {
         fail_message(e, out, "bytecode module has an anonymous name; compile it with a real one");
     } else if (!module_name_taken(e, name, out)) {
@@ -1586,6 +1599,7 @@ int32_t kmpjs_register_module_bytecode(kmpjs_engine *e, const uint8_t *buf, int3
         }
     }
     free(name);
+    run_end(e, outermost);
     return rc;
 }
 
