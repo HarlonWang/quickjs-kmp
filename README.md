@@ -22,7 +22,7 @@ English | [中文](./README_ZH.md)
 
 ```kotlin
 commonMain.dependencies {
-    implementation("wang.harlon:quickjs-kmp:latest.version")
+    implementation("wang.harlon:quickjs-kmp:latest.release")
 }
 ```
 
