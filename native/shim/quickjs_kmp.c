@@ -1424,46 +1424,45 @@ int32_t kmpjs_eval_module(kmpjs_engine *e, const char *code, int32_t code_len, c
 int32_t kmpjs_run_bytecode(kmpjs_engine *e, const uint8_t *buf, int32_t len, int32_t flags, kmpjs_value *out)
 {
     int outermost = run_begin(e);
-    int kind, anonymous;
+    int kind, anonymous = 1, finished = 0;
     const uint8_t *body;
     size_t body_len;
     char *name = NULL;
     JSValue obj;
-    JSModuleDef *m;
+    JSModuleDef *m = NULL;
+    int32_t rc = -1;
 
     if (check_bytecode_header(e, buf, len, &kind, &body, &body_len, out))
-        goto fail;
-    if (kind == 0) {
-        obj = read_bytecode_body(e, body, body_len, kind, out);
-        if (JS_IsException(obj))
-            goto fail;
-        return finish(e, outermost, JS_EvalFunction(e->ctx, obj), flags, 1, NULL, out);
+        goto done;
+    if (kind == 1) {
+        name = peek_module_name(e, body, body_len, out);
+        if (!name)
+            goto done;
+        anonymous = name[0] == '<';
+        if (!anonymous && module_name_taken(e, name, out))
+            goto done;
     }
-    name = peek_module_name(e, body, body_len, out);
-    if (!name)
-        goto fail;
-    anonymous = name[0] == '<';
-    if (!anonymous && module_name_taken(e, name, out))
-        goto fail;
     obj = read_bytecode_body(e, body, body_len, kind, out);
     if (JS_IsException(obj))
-        goto fail;
-    m = JS_VALUE_GET_PTR(obj);
-    if (set_import_meta(e, m, name) || JS_ResolveModule(e->ctx, obj) < 0) {
-        JS_FreeValue(e->ctx, obj);
-        free(name);
-        return finish(e, outermost, JS_EXCEPTION, flags, 0, NULL, out);
+        goto done;
+    if (kind == 1) {
+        m = JS_VALUE_GET_PTR(obj);
+        if (set_import_meta(e, m, name) || JS_ResolveModule(e->ctx, obj) < 0) {
+            JS_FreeValue(e->ctx, obj);
+            obj = JS_EXCEPTION;
+        } else if (!anonymous && claim_module_name(e, name, KMP_MODULE_EVALUATED, NULL, 0, out)) {
+            JS_FreeValue(e->ctx, obj);
+            goto done;
+        }
+        flags |= KMPJS_FLAG_REF_OBJECTS;
     }
-    if (!anonymous && claim_module_name(e, name, KMP_MODULE_EVALUATED, NULL, 0, out)) {
-        JS_FreeValue(e->ctx, obj);
-        goto fail;
-    }
+    rc = finish(e, outermost, JS_IsException(obj) ? obj : JS_EvalFunction(e->ctx, obj), flags, 1, m, out);
+    finished = 1;
+done:
     free(name);
-    return finish(e, outermost, JS_EvalFunction(e->ctx, obj), flags | KMPJS_FLAG_REF_OBJECTS, 1, m, out);
-fail:
-    free(name);
-    run_end(e, outermost);
-    return -1;
+    if (!finished)
+        run_end(e, outermost);
+    return rc;
 }
 
 /* The module is read into the engine right away (the engine caches it under its compiled name from

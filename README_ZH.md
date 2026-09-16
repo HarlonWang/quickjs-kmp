@@ -72,7 +72,7 @@ JsEngine(JsEngineConfig(moduleScheme = "app")).use { engine ->
 
 ### 预编译字节码
 
-`JsBytecode.compile` 不需要引擎就能把脚本或模块编成字节码；`runBytecode` 可以反复执行它，编译好的模块按编译时的名字注册。字节码绑定到编出它的 SDK 所内嵌的引擎版本（`QuickJs.upstreamCommit`），除此之外跨架构通用；不匹配时以明确的 `JsException` 拒绝。其余内容不做校验，只加载本 SDK 编出来的字节码。
+`JsBytecode.compile` 不需要引擎就能把脚本或模块编成字节码。`runBytecode` 对脚本可以反复执行；用真实名字编译的模块只执行一次并像 `evaluateModule` 一样占用该名字，也可以改为按该名字注册、供其他模块 import。字节码跨架构通用，但绑定到编出它的 SDK 所内嵌的引擎版本（`QuickJs.upstreamCommit`）：文件头只用来识别引擎版本，不匹配时以明确的 `JsException` 拒绝。这个头不是完整性或来源校验，其余内容也不做校验，只加载你自己编出来并保管的字节码。
 
 ```kotlin
 val page = JsBytecode.compile(pageSource, "pages/list", module = true, strip = JsBytecode.Strip.SOURCE)  // 构建期，或设备上编一次缓存

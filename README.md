@@ -72,7 +72,7 @@ JsEngine(JsEngineConfig(moduleScheme = "app")).use { engine ->
 
 ### Precompiled bytecode
 
-`JsBytecode.compile` turns a script or module into engine bytecode without an engine; `runBytecode` runs it any number of times, and a compiled module can be registered by the name it was compiled with. Bytecode is bound to the engine build of the SDK that produced it (`QuickJs.upstreamCommit`) and is otherwise portable across architectures; a mismatch is rejected with a clear `JsException`. Nothing else about the bytes is validated, so only load what this SDK compiled.
+`JsBytecode.compile` turns a script or module into engine bytecode without an engine. `runBytecode` runs a script any number of times; a module compiled under a real name runs once and claims that name like `evaluateModule`, and can instead be registered by that name so other modules import it. Bytecode is portable across architectures but bound to the engine build of the SDK that produced it (`QuickJs.upstreamCommit`): the header identifies that build and a mismatch is rejected with a clear `JsException`. That header is not an integrity or authenticity check and nothing else about the bytes is validated, so only load bytecode you built and stored yourself.
 
 ```kotlin
 val page = JsBytecode.compile(pageSource, "pages/list", module = true, strip = JsBytecode.Strip.SOURCE)  // at build time, or once on device
