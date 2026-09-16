@@ -7,6 +7,7 @@ QuickJS 的 KMP 绑定 SDK，mquickjs-kmp（已归档）的后继，代码与决
 - `library/`：核心模块，artifactId `quickjs-kmp`（主模块叫 library，扩展模块用自己的名字并以 `quickjs-kmp-` 为产物前缀），包名 `wang.harlon.quickjs`；kotlinx.serialization 类型化桥接在 `*Serialization.kt`
 - `native/quickjs/`：上游 git subtree，**禁止直接修改**，改动进 `native/patches/`
 - `native/shim/`：唯一的 C API 层，JNI 与 cinterop 都只对接它
+- `native/tools/qjsc_kmp.c`：宿主命令行编译器，只是 `kmpjs_compile` 的包装
 - `native/UPSTREAM`：上游 commit 唯一真值，Gradle 读它生成 `BuildInfo.kt`，CMake 读它注入 `KMPJS_UPSTREAM_COMMIT`
 - `docs/decisions.md`：为什么这么定；改决策时更新条目，不追加叙事
 
@@ -27,6 +28,7 @@ QuickJS 的 KMP 绑定 SDK，mquickjs-kmp（已归档）的后继，代码与决
 - macOS 单测（最快的反馈）：`./gradlew :library:macosArm64Test`
 - Android host test（真实 JNI 路径，不需要模拟器）：`./gradlew :library:testAndroidHostTest`
 - shim 的 C 测试（ASan）：`./gradlew :library:nativeShimTest`，改 shim 必跑
+- 宿主工具：`./gradlew :library:buildHostTools` 编出 `qjsc-kmp`，`:library:hostToolsTest` 冒烟
 - Android 设备测试（需模拟器在线）：`./gradlew :library:connectedAndroidDeviceTest`
 - iOS 只编译：`./gradlew :library:compileKotlinIosArm64 :library:compileKotlinIosSimulatorArm64`
 - 改 shim 时新增的行为要在 `native/test/shim_test.c` 里加 CHECK

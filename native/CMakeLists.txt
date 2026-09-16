@@ -4,6 +4,7 @@ project(quickjs_kmp C)
 # Host-side JNI library so Android host tests can exercise the real JNI path on the build machine
 option(QJS_HOST_JNI "build the JNI shared library for the host JVM" OFF)
 option(QJS_SHIM_TEST "build the host shim test binary (native/test)" OFF)
+option(QJS_TOOLS "build the host command line tools (native/tools)" OFF)
 option(QJS_ASAN "compile everything with AddressSanitizer" OFF)
 
 set(QJS_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/quickjs)
@@ -65,4 +66,10 @@ if(QJS_SHIM_TEST)
     add_executable(shim_test test/shim_test.c)
     target_compile_options(shim_test PRIVATE -Wall)
     target_link_libraries(shim_test PRIVATE quickjs_kmp_static m)
+endif()
+
+if(QJS_TOOLS)
+    add_executable(qjsc-kmp tools/qjsc_kmp.c)
+    target_compile_options(qjsc-kmp PRIVATE -Wall)
+    target_link_libraries(qjsc-kmp PRIVATE quickjs_kmp_static m)
 endif()
