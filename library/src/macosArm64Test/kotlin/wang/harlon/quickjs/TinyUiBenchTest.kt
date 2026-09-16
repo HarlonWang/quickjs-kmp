@@ -32,9 +32,13 @@ class TinyUiBenchTest {
     private fun benchFile(name: String): String = readFile("$benchDir/$name")
 
     private fun qjsVerifyStream(scenario: String): List<String> {
-        val cmd = "'$benchDir/.engine-qjs/qjs' --std -I '$benchDir/harness.js' -I '$benchDir/signal.js' '$benchDir/run.js' $scenario verify"
+        val dir = shellQuote(benchDir!!)
+        val cmd = "$dir/.engine-qjs/qjs --std -I $dir/harness.js -I $dir/signal.js $dir/run.js $scenario verify"
         return runCommand(cmd).filter { !it.startsWith("RESULT ") }
     }
+
+    /** popen goes through the shell; a single-quoted word only needs its own quotes escaped. */
+    private fun shellQuote(path: String): String = "'" + path.replace("'", "'\\''") + "'"
 
     private fun newEngine(lines: MutableList<String>): JsEngine =
         JsEngine(JsEngineConfig(memoryLimit = 64L * 1024 * 1024, logger = { lines += it })).also { engine ->
