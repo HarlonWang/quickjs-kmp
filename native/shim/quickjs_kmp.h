@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-#define KMPJS_ABI_VERSION 6
+#define KMPJS_ABI_VERSION 7
 
 typedef struct kmpjs_engine kmpjs_engine;
 
@@ -70,12 +70,19 @@ typedef void (*kmpjs_log_fn)(void *user, const char *msg, int32_t len);
 /* A promise rejected during the call that just finished and still unhandled when it returns.
    `reason` is a KMPJS_TAG_EXCEPTION value valid only during the callback. */
 typedef void (*kmpjs_rejection_fn)(void *user, const kmpjs_value *reason);
+/* Asked for a module the name table does not know, at its first import (static or dynamic), on the
+   engine thread and inside the importing call: it must return synchronously and must not call back
+   into the engine. Fill *result with KMPJS_TAG_STRING (module source), KMPJS_TAG_BINARY (module
+   bytecode compiled under exactly `name`) or KMPJS_TAG_UNDEFINED (unknown, the import throws
+   ReferenceError) and return 0; or return non-zero with result->str holding an error message that
+   is thrown as an Error. Payloads come from kmpjs_alloc(); the engine frees them. */
+typedef int (*kmpjs_module_fn)(void *user, const char *name, int32_t name_len, kmpjs_value *result);
 
 int32_t kmpjs_abi_version(void);
 
-/* Returns NULL when the runtime cannot be created. */
+/* Returns NULL when the runtime cannot be created. `module_loader` may be NULL. */
 kmpjs_engine *kmpjs_create(const kmpjs_config *config, void *user, kmpjs_host_fn host, kmpjs_log_fn log,
-                           kmpjs_rejection_fn rejection);
+                           kmpjs_rejection_fn rejection, kmpjs_module_fn module_loader);
 void kmpjs_destroy(kmpjs_engine *e);
 void *kmpjs_get_user(kmpjs_engine *e);
 
@@ -105,11 +112,12 @@ int32_t kmpjs_ref_call(kmpjs_engine *e, int64_t ref, int64_t this_ref, const kmp
 int32_t kmpjs_ref_to_json(kmpjs_engine *e, int64_t ref, kmpjs_value *out);
 
 /* ---- ES modules ----
-   Modules are resolved from a name table only: import specifiers are looked up verbatim (no relative
-   path handling) and an unknown name throws ReferenceError. Registration keeps the source; it is
-   compiled at the first import. A module evaluated with kmpjs_eval_module is cached by the engine
-   under its name as well and can be imported afterwards, so registered and evaluated names share
-   one namespace: claiming a name twice fails either way. Names in angle brackets are anonymous. */
+   Modules are resolved by name only: import specifiers are looked up verbatim (no relative path
+   handling) in the name table, then through kmpjs_module_fn when one is set, and an unknown name
+   throws ReferenceError. Registration keeps the source; it is compiled at the first import. A module
+   evaluated with kmpjs_eval_module or supplied by the loader is cached by the engine under its name
+   as well and can be imported afterwards, so all these names share one namespace: claiming a name
+   twice fails either way. Names in angle brackets are anonymous. */
 int32_t kmpjs_register_module(kmpjs_engine *e, const char *name, const char *code, int32_t code_len, kmpjs_value *out);
 /* Compiles and evaluates a module. The result is the module namespace as a KMPJS_TAG_REF once the
    module has run; a module still awaiting at top level comes back as a KMPJS_REF_PROMISE ref. */

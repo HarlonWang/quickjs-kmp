@@ -79,6 +79,15 @@ JsEngine(JsEngineConfig(moduleScheme = "app")).use { engine ->
 
 `evaluateModule` returns the namespace as a `JsRef`, and the module can be imported by its name afterwards. A registered module is compiled at its first import and runs once; registered and evaluated names share one namespace, so claiming a name twice throws (names in angle brackets, like the default, are anonymous). Top-level `await` is supported: a module still pending when the call returns comes back as a `JsRef` with `isPromise`. Each `evaluateModule` call leaves the compiled module in the engine for its lifetime.
 
+Names the table does not know can come from `JsEngineConfig.moduleLoader` instead: it is asked once per name at the first import, static or dynamic `import()`, and answers with `JsModuleSource.Text` or `JsModuleSource.Bytecode` (compiled under exactly that name) or `null` for "unknown". Registered names are never asked. The loader runs synchronously on the engine thread inside the importing call and must not call the engine, so it is a cache lookup: fetch ahead of time, then let the script `import()`.
+
+```kotlin
+val cache = mutableMapOf<String, ByteArray>() // filled by the host before the script imports
+JsEngine(JsEngineConfig(moduleLoader = { name -> cache[name]?.let { JsModuleSource.Bytecode(it) } })).use { engine ->
+    engine.evaluate("import('pages/detail').then(m => m.title)") // JsValue.Str(...) once the loader served it
+}
+```
+
 ### Precompiled bytecode
 
 `JsBytecode.compile` turns a script or module into engine bytecode without an engine. `runBytecode` runs a script any number of times; a module compiled under a real name runs once and claims that name like `evaluateModule`, and can instead be registered by that name so other modules import it. Bytecode is portable across architectures but bound to the engine build of the SDK that produced it (`QuickJs.upstreamCommit`): the header identifies that build and a mismatch is rejected with a clear `JsException`. That header is not an integrity or authenticity check and nothing else about the bytes is validated, so only load bytecode you built and stored yourself.

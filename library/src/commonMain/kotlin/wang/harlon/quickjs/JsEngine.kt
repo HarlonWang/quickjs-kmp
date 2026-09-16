@@ -44,6 +44,16 @@ class JsEngine(private val config: JsEngineConfig = JsEngineConfig()) : AutoClos
             } catch (_: Throwable) {
             }
         }
+
+        override fun onLoadModule(name: String): RawValue = try {
+            when (val module = config.moduleLoader?.invoke(name)) {
+                null -> RawValue(NativeTag.UNDEFINED)
+                is JsModuleSource.Text -> RawValue(NativeTag.STRING, str = module.code)
+                is JsModuleSource.Bytecode -> RawValue(NativeTag.BINARY, bytes = module.bytes)
+            }
+        } catch (t: Throwable) {
+            t.toHostError()
+        }
     }
 
     internal val native = NativeEngine(config, callbacks)
@@ -84,8 +94,10 @@ class JsEngine(private val config: JsEngineConfig = JsEngineConfig()) : AutoClos
 
     /**
      * Makes [source] importable as the ES module [name], exactly as scripts spell the specifier:
-     * there is no relative-path resolution. The module is compiled at its first import.
-     * @throws JsException when [name] is already registered or was evaluated by [evaluateModule]
+     * there is no relative-path resolution. The module is compiled at its first import. A registered
+     * name is never asked from [JsEngineConfig.moduleLoader].
+     * @throws JsException when [name] is already registered, was evaluated by [evaluateModule], or
+     * was already supplied by the module loader
      */
     fun registerModule(name: String, source: String) {
         checkOpen()

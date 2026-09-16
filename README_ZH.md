@@ -79,6 +79,15 @@ JsEngine(JsEngineConfig(moduleScheme = "app")).use { engine ->
 
 `evaluateModule` 以 `JsRef` 返回 namespace，之后该模块可以按名字被 import。注册的模块在第一次 import 时编译、只执行一次；注册名与求值名共用一个命名空间，任何名字占用两次都会抛异常（尖括号形式的名字如默认的 `<module>` 视为匿名）。支持顶层 `await`：调用返回时仍未完成的模块以带 `isPromise` 的 `JsRef` 返回。每次 `evaluateModule` 都会把编译后的模块留在引擎里直到引擎关闭。
 
+名字表查不到的名字可以交给 `JsEngineConfig.moduleLoader`：每个名字在第一次 import（静态或动态 `import()`）时问一次，回答 `JsModuleSource.Text` 或 `JsModuleSource.Bytecode`（必须以该名字编译）或 `null` 表示不存在；已注册的名字不会问到它。loader 在引擎线程上、在发起 import 的那次调用内同步执行，不能回调引擎，所以它只应是缓存查找：先下载好，再让脚本 `import()`。
+
+```kotlin
+val cache = mutableMapOf<String, ByteArray>() // 宿主在脚本 import 之前填好
+JsEngine(JsEngineConfig(moduleLoader = { name -> cache[name]?.let { JsModuleSource.Bytecode(it) } })).use { engine ->
+    engine.evaluate("import('pages/detail').then(m => m.title)") // loader 给出后得到 JsValue.Str(...)
+}
+```
+
 ### 预编译字节码
 
 `JsBytecode.compile` 不需要引擎就能把脚本或模块编成字节码。`runBytecode` 对脚本可以反复执行；用真实名字编译的模块只执行一次并像 `evaluateModule` 一样占用该名字，也可以改为按该名字注册、供其他模块 import。字节码跨架构通用，但绑定到编出它的 SDK 所内嵌的引擎版本（`QuickJs.upstreamCommit`）：文件头只用来识别引擎版本，不匹配时以明确的 `JsException` 拒绝。这个头不是完整性或来源校验，其余内容也不做校验，只加载你自己编出来并保管的字节码。

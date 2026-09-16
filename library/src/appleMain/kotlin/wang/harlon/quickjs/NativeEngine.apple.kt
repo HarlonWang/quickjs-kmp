@@ -60,7 +60,7 @@ internal actual class NativeEngine actual constructor(config: JsEngineConfig, in
             cfg.max_stack_size = config.maxStackSize
             cfg.gc_threshold = config.gcThreshold
             cfg.module_scheme = cString(config.moduleScheme)
-            kmpjs_create(cfg.ptr, ref.asCPointer(), hostCallback, logCallback, rejectionCallback)
+            kmpjs_create(cfg.ptr, ref.asCPointer(), hostCallback, logCallback, rejectionCallback, if (config.moduleLoader != null) moduleCallback else null)
         }
         if (engine == null) {
             ref.dispose()
@@ -237,6 +237,24 @@ internal actual class NativeEngine actual constructor(config: JsEngineConfig, in
                 val engine = user!!.asStableRef<NativeEngine>().get()
                 engine.host.onUnhandledRejection(reason!!.pointed.toRaw())
             } catch (_: Throwable) {
+            }
+        }
+
+        val moduleCallback = staticCFunction { user: COpaquePointer?, name: CPointer<kotlinx.cinterop.ByteVar>?, len: Int, result: CPointer<kmpjs_value>? ->
+            val out = result!!.pointed
+            try {
+                val engine = user!!.asStableRef<NativeEngine>().get()
+                val text = if (name == null || len <= 0) "" else Wtf8.decode(name.readBytes(len))
+                val raw = engine.host.onLoadModule(text)
+                raw.writeTo(out)
+                if (raw.tag == NativeTag.EXCEPTION) 1 else 0
+            } catch (t: Throwable) {
+                try {
+                    t.toHostError().writeTo(out)
+                } catch (_: Throwable) {
+                    RawValue(NativeTag.EXCEPTION).writeTo(out)
+                }
+                1
             }
         }
     }

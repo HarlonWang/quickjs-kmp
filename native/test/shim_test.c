@@ -11,6 +11,8 @@ static int64_t retained_ref;
 static char last_log[512];
 static int rejections;
 static char last_rejection[512];
+static int loader_calls;
+static char last_loaded[128];
 
 #define CHECK(cond) do { if (!(cond)) { failures++; printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); } } while (0)
 #define S(x) x, (int32_t)strlen(x)
@@ -38,6 +40,34 @@ static void set_str(kmpjs_value *v, int32_t tag, const char *text)
     v->str = kmpjs_alloc((int32_t)strlen(text));
     memcpy((char *)v->str, text, strlen(text));
     v->str_len = (int32_t)strlen(text);
+}
+
+/* Module loader: "host-" names come from here, everything else is unknown. */
+static int loader(void *user, const char *name, int32_t len, kmpjs_value *result)
+{
+    int32_t n = len < (int32_t)sizeof(last_loaded) - 1 ? len : (int32_t)sizeof(last_loaded) - 1;
+    memset(result, 0, sizeof(*result));
+    memcpy(last_loaded, name, (size_t)n);
+    last_loaded[n] = '\0';
+    loader_calls++;
+    if (strcmp(name, "host-src") == 0 || strcmp(name, "counter") == 0) {
+        set_str(result, KMPJS_TAG_STRING, "export const from = 'loader'; export const url = import.meta.url;");
+    } else if (strcmp(name, "host-bc") == 0 || strcmp(name, "host-renamed") == 0) {
+        CHECK(kmpjs_compile(S("import { from } from 'host-src'; export default from + '/bytecode';"), "host-bc", KMPJS_COMPILE_MODULE, result) == 0);
+        result->tag = KMPJS_TAG_BINARY;
+    } else if (strcmp(name, "host-script") == 0) {
+        CHECK(kmpjs_compile(S("1 + 1"), "host-script", 0, result) == 0);
+        result->tag = KMPJS_TAG_BINARY;
+    } else if (strcmp(name, "host-dyn") == 0) {
+        set_str(result, KMPJS_TAG_STRING, "export const d = 'dynamic';");
+    } else if (strcmp(name, "host-fail") == 0) {
+        set_str(result, KMPJS_TAG_EXCEPTION, "loader failed");
+        return 1;
+    } else if (strcmp(name, "host-number") == 0) {
+        result->tag = KMPJS_TAG_NUMBER;
+        result->num = 1;
+    }
+    return 0;
 }
 
 static kmpjs_value eval(const char *code, int32_t flags)
@@ -260,6 +290,54 @@ static void test_modules(void)
     kmpjs_get_stats(g, &st); CHECK(st.live_refs == 0);
 }
 
+static void test_module_loader(void)
+{
+    kmpjs_value v, out;
+    kmpjs_config cfg = { "test", 0, 256 * 1024, 0 };
+    kmpjs_engine *plain;
+
+    /* the table wins: the loader has a 'counter' too but is never asked for it */
+    loader_calls = 0;
+    CHECK(kmpjs_eval_module(g, S("import { n } from 'counter'; export default n;"), "<module>", 0, &v) == 0 && loader_calls == 0);
+    kmpjs_ref_release(g, v.ref);
+    /* source from the host, asked once, then cached under its name like any other module */
+    CHECK(kmpjs_eval_module(g, S("import { from, url } from 'host-src'; export const r = from + '@' + url;"), "<module>", 0, &v) == 0);
+    CHECK(loader_calls == 1 && strcmp(last_loaded, "host-src") == 0);
+    CHECK(kmpjs_ref_get(g, v.ref, "r", 0, &out) == 0 && str_is(&out, "loader@test:host-src"));
+    kmpjs_ref_release(g, v.ref);
+    CHECK(kmpjs_eval_module(g, S("import { from } from 'host-src'; export const r = from;"), "<module>", 0, &v) == 0 && loader_calls == 1);
+    kmpjs_ref_release(g, v.ref);
+    CHECK(kmpjs_register_module(g, "host-src", S("export const from = 'shadow';"), &out) != 0 && str_has(&out, "already loaded by the module loader"));
+    CHECK(kmpjs_eval_module(g, S("export const from = 'twice';"), "host-src", 0, &v) != 0 && str_has(&v, "already loaded"));
+    /* bytecode from the host, which may itself import through the loader */
+    CHECK(kmpjs_eval_module(g, S("import bc from 'host-bc'; export const r = bc;"), "<module>", 0, &v) == 0);
+    CHECK(kmpjs_ref_get(g, v.ref, "r", 0, &out) == 0 && str_is(&out, "loader/bytecode"));
+    kmpjs_ref_release(g, v.ref);
+    CHECK(loader_calls == 2);
+    /* what the loader may not return */
+    CHECK(kmpjs_eval_module(g, S("import 'host-renamed';"), "<module>", 0, &v) != 0 && str_has(&v, "TypeError") && str_has(&v, "compiled as 'host-bc'"));
+    CHECK(kmpjs_eval_module(g, S("import 'host-script';"), "<module>", 0, &v) != 0 && str_has(&v, "not a module"));
+    CHECK(kmpjs_eval_module(g, S("import 'host-fail';"), "<module>", 0, &v) != 0 && str_is(&v, "Error: loader failed"));
+    CHECK(kmpjs_eval_module(g, S("import 'host-number';"), "<module>", 0, &v) != 0 && str_has(&v, "TypeError") && str_has(&v, "neither source nor bytecode"));
+    CHECK(kmpjs_eval_module(g, S("import 'host-unknown';"), "<module>", 0, &v) != 0 && str_has(&v, "module 'host-unknown' is not registered"));
+    /* a failed load spends no name */
+    CHECK(kmpjs_register_module(g, "host-fail", S("export const ok = 1;"), &out) == 0);
+    CHECK(kmpjs_eval_module(g, S("import { ok } from 'host-fail'; export default ok;"), "<module>", 0, &v) == 0);
+    kmpjs_ref_release(g, v.ref);
+    /* dynamic import() runs as a microtask and still resolves through the loader */
+    loader_calls = 0;
+    v = eval("import('host-dyn').then(m => { globalThis.dyn = m.d; }); 0", 0);
+    CHECK(v.tag == KMPJS_TAG_NUMBER && loader_calls == 1 && strcmp(last_loaded, "host-dyn") == 0);
+    v = eval("dyn", 0); CHECK(str_is(&v, "dynamic"));
+    v = eval("import('host-unknown').catch(e => { globalThis.dynErr = String(e); }); 0", 0);
+    v = eval("dynErr", 0); CHECK(str_has(&v, "ReferenceError") && str_has(&v, "host-unknown"));
+    /* without a loader an unknown name is the plain ReferenceError */
+    plain = kmpjs_create(&cfg, NULL, host, logger, rejection, NULL);
+    CHECK(plain != NULL);
+    CHECK(kmpjs_eval_module(plain, S("import 'host-src';"), "<module>", 0, &v) != 0 && str_has(&v, "module 'host-src' is not registered"));
+    kmpjs_destroy(plain);
+}
+
 static void test_bytecode(void)
 {
     static const char script[] = "var runs = (typeof runs === 'number' ? runs : 0) + 1; BigInt(report(runs) * 10) + 2n ** 64n % 7n";
@@ -464,9 +542,9 @@ int main(void)
     kmpjs_value v;
     kmpjs_config cfg = { "test", 4 * 1024 * 1024, 256 * 1024, 0 };
     kmpjs_config tiny = { NULL, 100, 0, 0 };
-    g = kmpjs_create(&cfg, NULL, host, logger, rejection);
+    g = kmpjs_create(&cfg, NULL, host, logger, rejection, loader);
     CHECK(g != NULL);
-    CHECK(kmpjs_create(&tiny, NULL, host, logger, rejection) == NULL);
+    CHECK(kmpjs_create(&tiny, NULL, host, logger, rejection, NULL) == NULL);
     test_values();
     test_exceptions();
     test_host_functions();
@@ -474,6 +552,7 @@ int main(void)
     test_promises();
     test_bigint_and_binary();
     test_modules();
+    test_module_loader();
     test_bytecode();
     /* destroy with refs still open must be clean */
     v = eval("({leak: 1})", KMPJS_FLAG_REF_OBJECTS); CHECK(v.tag == KMPJS_TAG_REF);

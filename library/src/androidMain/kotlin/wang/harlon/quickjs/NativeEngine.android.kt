@@ -1,7 +1,7 @@
 package wang.harlon.quickjs
 
 internal actual class NativeEngine actual constructor(config: JsEngineConfig, internal val host: HostCallbacks) {
-    private var ptr: Long = NativeBridge.nativeCreate(config.memoryLimit, config.maxStackSize, config.gcThreshold, config.moduleScheme.encodeToByteArray(), this)
+    private var ptr: Long = NativeBridge.nativeCreate(config.memoryLimit, config.maxStackSize, config.gcThreshold, config.moduleScheme.encodeToByteArray(), config.moduleLoader != null, this)
 
     init {
         if (ptr == 0L) throw JsException("failed to create engine")

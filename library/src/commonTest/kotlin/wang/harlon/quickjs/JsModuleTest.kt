@@ -107,6 +107,77 @@ class JsModuleTest {
     }
 
     @Test
+    fun moduleLoaderSuppliesSourceOrBytecodeOnceAtFirstImport() {
+        val asked = mutableListOf<String>()
+        val core = JsBytecode.compile("import { from } from 'lazy'; export default from + '/bytecode';", "core", module = true)
+        val loader = { name: String ->
+            asked += name
+            when (name) {
+                "lazy" -> JsModuleSource.Text("export const from = 'loader'; export const url = import.meta.url;")
+                "core" -> JsModuleSource.Bytecode(core)
+                else -> null
+            }
+        }
+        JsEngine(JsEngineConfig(moduleScheme = "app", moduleLoader = loader)).use { engine ->
+            engine.evaluateModule("import core from 'core'; import { url } from 'lazy'; export const r = core + '@' + url;").use {
+                assertEquals(JsValue.Str("loader/bytecode@app:lazy"), it.get("r"))
+            }
+            engine.evaluateModule("import { from } from 'lazy'; export default from;").use { assertEquals(JsValue.Str("loader"), it.get("default")) }
+            assertEquals(listOf("core", "lazy"), asked)
+            val shadow = assertFailsWith<JsException> { engine.registerModule("lazy", "export const from = 'shadow';") }
+            assertTrue(shadow.message.orEmpty().contains("already loaded"), "message was: ${shadow.message}")
+            assertEquals(0, engine.stats().liveRefs)
+        }
+    }
+
+    @Test
+    fun registeredModulesAreNeverAskedFromTheLoader() {
+        var asked = 0
+        JsEngine(JsEngineConfig(moduleLoader = { asked++; JsModuleSource.Text("export const v = 'loader';") })).use { engine ->
+            engine.registerModule("m", "export const v = 'registered';")
+            engine.evaluateModule("import { v } from 'm'; export default v;").use { assertEquals(JsValue.Str("registered"), it.get("default")) }
+            assertEquals(0, asked)
+        }
+    }
+
+    @Test
+    fun loaderMissesAndFailuresSurfaceAtTheImport() {
+        val wrongName = JsBytecode.compile("export const x = 1;", "other", module = true)
+        val loader = { name: String ->
+            when (name) {
+                "boom" -> throw IllegalStateException("no network")
+                "renamed" -> JsModuleSource.Bytecode(wrongName)
+                "script" -> JsModuleSource.Bytecode(JsBytecode.compile("1 + 1", "script"))
+                else -> null
+            }
+        }
+        JsEngine(JsEngineConfig(moduleLoader = loader)).use { engine ->
+            val missing = assertFailsWith<JsException> { engine.evaluateModule("import 'missing';") }
+            assertEquals("ReferenceError: module 'missing' is not registered", missing.message)
+            val boom = assertFailsWith<JsException> { engine.evaluateModule("import 'boom';") }
+            assertEquals("Error: no network", boom.message)
+            val renamed = assertFailsWith<JsException> { engine.evaluateModule("import 'renamed';") }
+            assertTrue(renamed.message.orEmpty().contains("compiled as 'other'"), "message was: ${renamed.message}")
+            val script = assertFailsWith<JsException> { engine.evaluateModule("import 'script';") }
+            assertTrue(script.message.orEmpty().contains("not a module"), "message was: ${script.message}")
+            // a failed load spends no name
+            engine.registerModule("boom", "export const ok = true;")
+            engine.evaluateModule("import { ok } from 'boom'; export default ok;").use { assertEquals(JsValue.Bool(true), it.get("default")) }
+        }
+    }
+
+    @Test
+    fun dynamicImportResolvesThroughTheLoader() {
+        var asked = 0
+        JsEngine(JsEngineConfig(moduleLoader = { asked++; if (it == "page/detail") JsModuleSource.Text("export const title = 'detail';") else null })).use { engine ->
+            assertEquals(JsValue.Str("detail"), engine.evaluate("import('page/detail').then(m => m.title)"))
+            assertEquals(1, asked)
+            val e = assertFailsWith<JsException> { engine.evaluate("import('page/none')") }
+            assertTrue(e.message.orEmpty().contains("'page/none' is not registered"), "message was: ${e.message}")
+        }
+    }
+
+    @Test
     fun invalidSchemeIsRejected() {
         assertFailsWith<IllegalArgumentException> { JsEngineConfig(moduleScheme = "") }
         assertFailsWith<IllegalArgumentException> { JsEngineConfig(moduleScheme = "a:b") }

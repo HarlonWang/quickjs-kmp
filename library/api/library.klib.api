@@ -125,7 +125,7 @@ final class wang.harlon.quickjs/JsEngine : kotlin/AutoCloseable { // wang.harlon
 }
 
 final class wang.harlon.quickjs/JsEngineConfig { // wang.harlon.quickjs/JsEngineConfig|null[0]
-    constructor <init>(kotlin/Long = ..., kotlin/Long = ..., kotlin/Long = ..., kotlin/Function1<kotlin/String, kotlin/Unit>? = ..., kotlin/Function1<wang.harlon.quickjs/JsException, kotlin/Unit>? = ..., kotlin/String = ...) // wang.harlon.quickjs/JsEngineConfig.<init>|<init>(kotlin.Long;kotlin.Long;kotlin.Long;kotlin.Function1<kotlin.String,kotlin.Unit>?;kotlin.Function1<wang.harlon.quickjs.JsException,kotlin.Unit>?;kotlin.String){}[0]
+    constructor <init>(kotlin/Long = ..., kotlin/Long = ..., kotlin/Long = ..., kotlin/Function1<kotlin/String, kotlin/Unit>? = ..., kotlin/Function1<wang.harlon.quickjs/JsException, kotlin/Unit>? = ..., kotlin/String = ..., kotlin/Function1<kotlin/String, wang.harlon.quickjs/JsModuleSource?>? = ...) // wang.harlon.quickjs/JsEngineConfig.<init>|<init>(kotlin.Long;kotlin.Long;kotlin.Long;kotlin.Function1<kotlin.String,kotlin.Unit>?;kotlin.Function1<wang.harlon.quickjs.JsException,kotlin.Unit>?;kotlin.String;kotlin.Function1<kotlin.String,wang.harlon.quickjs.JsModuleSource?>?){}[0]
 
     final val gcThreshold // wang.harlon.quickjs/JsEngineConfig.gcThreshold|{}gcThreshold[0]
         final fun <get-gcThreshold>(): kotlin/Long // wang.harlon.quickjs/JsEngineConfig.gcThreshold.<get-gcThreshold>|<get-gcThreshold>(){}[0]
@@ -135,6 +135,8 @@ final class wang.harlon.quickjs/JsEngineConfig { // wang.harlon.quickjs/JsEngine
         final fun <get-maxStackSize>(): kotlin/Long // wang.harlon.quickjs/JsEngineConfig.maxStackSize.<get-maxStackSize>|<get-maxStackSize>(){}[0]
     final val memoryLimit // wang.harlon.quickjs/JsEngineConfig.memoryLimit|{}memoryLimit[0]
         final fun <get-memoryLimit>(): kotlin/Long // wang.harlon.quickjs/JsEngineConfig.memoryLimit.<get-memoryLimit>|<get-memoryLimit>(){}[0]
+    final val moduleLoader // wang.harlon.quickjs/JsEngineConfig.moduleLoader|{}moduleLoader[0]
+        final fun <get-moduleLoader>(): kotlin/Function1<kotlin/String, wang.harlon.quickjs/JsModuleSource?>? // wang.harlon.quickjs/JsEngineConfig.moduleLoader.<get-moduleLoader>|<get-moduleLoader>(){}[0]
     final val moduleScheme // wang.harlon.quickjs/JsEngineConfig.moduleScheme|{}moduleScheme[0]
         final fun <get-moduleScheme>(): kotlin/String // wang.harlon.quickjs/JsEngineConfig.moduleScheme.<get-moduleScheme>|<get-moduleScheme>(){}[0]
     final val onUnhandledRejection // wang.harlon.quickjs/JsEngineConfig.onUnhandledRejection|{}onUnhandledRejection[0]
@@ -206,6 +208,22 @@ final class wang.harlon.quickjs/JsRuntime : kotlin/AutoCloseable { // wang.harlo
     final suspend fun registerFunction(kotlin/String, wang.harlon.quickjs/ObjectTransport = ..., wang.harlon.quickjs/JsHostFunction) // wang.harlon.quickjs/JsRuntime.registerFunction|registerFunction(kotlin.String;wang.harlon.quickjs.ObjectTransport;wang.harlon.quickjs.JsHostFunction){}[0]
     final suspend fun registerModule(kotlin/String, kotlin/String) // wang.harlon.quickjs/JsRuntime.registerModule|registerModule(kotlin.String;kotlin.String){}[0]
     final suspend fun shutdown() // wang.harlon.quickjs/JsRuntime.shutdown|shutdown(){}[0]
+}
+
+sealed class wang.harlon.quickjs/JsModuleSource { // wang.harlon.quickjs/JsModuleSource|null[0]
+    final class Bytecode : wang.harlon.quickjs/JsModuleSource { // wang.harlon.quickjs/JsModuleSource.Bytecode|null[0]
+        constructor <init>(kotlin/ByteArray) // wang.harlon.quickjs/JsModuleSource.Bytecode.<init>|<init>(kotlin.ByteArray){}[0]
+
+        final val bytes // wang.harlon.quickjs/JsModuleSource.Bytecode.bytes|{}bytes[0]
+            final fun <get-bytes>(): kotlin/ByteArray // wang.harlon.quickjs/JsModuleSource.Bytecode.bytes.<get-bytes>|<get-bytes>(){}[0]
+    }
+
+    final class Text : wang.harlon.quickjs/JsModuleSource { // wang.harlon.quickjs/JsModuleSource.Text|null[0]
+        constructor <init>(kotlin/String) // wang.harlon.quickjs/JsModuleSource.Text.<init>|<init>(kotlin.String){}[0]
+
+        final val code // wang.harlon.quickjs/JsModuleSource.Text.code|{}code[0]
+            final fun <get-code>(): kotlin/String // wang.harlon.quickjs/JsModuleSource.Text.code.<get-code>|<get-code>(){}[0]
+    }
 }
 
 final object wang.harlon.quickjs/JsBytecode { // wang.harlon.quickjs/JsBytecode|null[0]

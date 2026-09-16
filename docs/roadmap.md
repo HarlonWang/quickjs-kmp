@@ -31,4 +31,4 @@
 
 ## 之后
 
-- Kotlin 回调式 module loader（热下发）
+- ~~Kotlin 回调式 module loader（热下发）~~ 已完成（`JsEngineConfig.moduleLoader`）
