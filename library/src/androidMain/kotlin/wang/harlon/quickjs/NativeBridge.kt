@@ -7,7 +7,7 @@ internal object NativeBridge {
         check(abi == ABI_VERSION) { "libquickjs_kmp ABI $abi does not match Kotlin side $ABI_VERSION" }
     }
 
-    const val ABI_VERSION = 5
+    const val ABI_VERSION = 6
 
     @JvmStatic external fun nativeAbiVersion(): Int
     @JvmStatic external fun nativeCreate(memoryLimit: Long, maxStackSize: Long, gcThreshold: Long, moduleScheme: ByteArray, target: Any): Long
@@ -24,6 +24,9 @@ internal object NativeBridge {
     @JvmStatic external fun nativeRefToJson(ptr: Long, ref: Long): NativeValue?
     @JvmStatic external fun nativeRegisterModule(ptr: Long, name: ByteArray, code: ByteArray): NativeValue?
     @JvmStatic external fun nativeEvalModule(ptr: Long, code: ByteArray, name: ByteArray, flags: Int): NativeValue?
+    @JvmStatic external fun nativeCompile(code: ByteArray, fileName: ByteArray, flags: Int): Any?
+    @JvmStatic external fun nativeRunBytecode(ptr: Long, bytes: ByteArray, flags: Int): NativeValue?
+    @JvmStatic external fun nativeRegisterModuleBytecode(ptr: Long, bytes: ByteArray): NativeValue?
     @JvmStatic external fun nativeStats(ptr: Long): LongArray?
     @JvmStatic external fun nativeDumpMemory(ptr: Long): NativeValue?
 

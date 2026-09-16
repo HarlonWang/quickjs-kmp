@@ -93,6 +93,30 @@ class JsEngine(private val config: JsEngineConfig = JsEngineConfig()) : AutoClos
     }
 
     /**
+     * Makes precompiled module [bytecode] (from [JsBytecode.compile] with `module = true`) importable
+     * under the name it was compiled with, which is returned. Unlike a source module it is read right
+     * away, so a bytecode built for another engine build is rejected here.
+     * @throws JsException when that name is taken, the bytecode is not a module, or it was compiled anonymously
+     */
+    fun registerModule(bytecode: ByteArray): String {
+        checkOpen()
+        return (decode(native.registerModuleBytecode(bytecode)) as JsValue.Str).value
+    }
+
+    /**
+     * Runs [bytecode] produced by [JsBytecode.compile]: a script yields its completion value like
+     * [evaluate], a module yields its namespace like [evaluateModule] (always a [JsRef]). A script
+     * or an anonymously named module can be run any number of times, at any point in the engine's
+     * life; a named module claims its name like [evaluateModule] does and therefore runs once.
+     * @throws JsException when the bytecode was built for another engine build, is corrupt, throws,
+     * or is a named module whose name is already taken
+     */
+    fun runBytecode(bytecode: ByteArray, objects: ObjectTransport = ObjectTransport.JSON): JsValue {
+        checkOpen()
+        return decode(native.runBytecode(bytecode, objects.flags))
+    }
+
+    /**
      * Compiles and runs [source] as an ES module and returns its namespace object, from which
      * `default` and named exports can be read. A module still awaiting at top level when this
      * returns comes back as a [JsRef] with [JsRef.isPromise] instead. The module stays in the engine

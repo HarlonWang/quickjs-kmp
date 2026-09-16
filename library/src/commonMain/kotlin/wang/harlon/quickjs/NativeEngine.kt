@@ -30,6 +30,10 @@ internal object NativeTag {
     const val BIGINT = 8
     const val BINARY = 9
 
+    const val COMPILE_MODULE = 1
+    const val COMPILE_STRIP_SOURCE = 2
+    const val COMPILE_STRIP_DEBUG = 4
+
     const val FLAG_REF_OBJECTS = 1
     const val REF_FUNCTION = 1
     const val REF_ARRAY = 2
@@ -52,10 +56,17 @@ internal expect class NativeEngine(config: JsEngineConfig, host: HostCallbacks) 
 
     fun registerModule(name: String, source: String): RawValue
     fun evalModule(source: String, name: String, flags: Int): RawValue
+    fun runBytecode(bytes: ByteArray, flags: Int): RawValue
+    fun registerModuleBytecode(bytes: ByteArray): RawValue
 
     /** The kmpjs_stats fields in declaration order. */
     fun stats(): LongArray
     fun dumpMemory(): RawValue
+}
+
+internal expect object NativeCompiler {
+    /** The bytecode on success, or a [RawValue] carrying the error. */
+    fun compile(source: String, fileName: String, flags: Int): Any
 }
 
 internal fun Throwable.hostErrorMessage(): String = message ?: this::class.simpleName ?: "host error"

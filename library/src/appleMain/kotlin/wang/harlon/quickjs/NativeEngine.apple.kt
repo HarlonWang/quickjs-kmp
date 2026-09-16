@@ -15,6 +15,7 @@ import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.pointed
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.readBytes
+import kotlinx.cinterop.reinterpret
 import kotlinx.cinterop.set
 import kotlinx.cinterop.staticCFunction
 import kotlinx.cinterop.usePinned
@@ -22,6 +23,7 @@ import platform.posix.memcpy
 import wang.harlon.quickjs.cinterop.KMPJS_ABI_VERSION
 import wang.harlon.quickjs.cinterop.kmpjs_abi_version
 import wang.harlon.quickjs.cinterop.kmpjs_alloc
+import wang.harlon.quickjs.cinterop.kmpjs_compile
 import wang.harlon.quickjs.cinterop.kmpjs_config
 import wang.harlon.quickjs.cinterop.kmpjs_create
 import wang.harlon.quickjs.cinterop.kmpjs_define_function
@@ -29,6 +31,8 @@ import wang.harlon.quickjs.cinterop.kmpjs_destroy
 import wang.harlon.quickjs.cinterop.kmpjs_dump_memory
 import wang.harlon.quickjs.cinterop.kmpjs_eval_module
 import wang.harlon.quickjs.cinterop.kmpjs_register_module
+import wang.harlon.quickjs.cinterop.kmpjs_register_module_bytecode
+import wang.harlon.quickjs.cinterop.kmpjs_run_bytecode
 import wang.harlon.quickjs.cinterop.kmpjs_get_stats
 import wang.harlon.quickjs.cinterop.kmpjs_eval
 import wang.harlon.quickjs.cinterop.kmpjs_free
@@ -158,6 +162,26 @@ internal actual class NativeEngine actual constructor(config: JsEngineConfig, in
         out.toRaw()
     }
 
+    actual fun runBytecode(bytes: ByteArray, flags: Int): RawValue = memScoped {
+        val out = alloc<kmpjs_value>()
+        if (bytes.isEmpty()) {
+            kmpjs_run_bytecode(handle(), null, 0, flags, out.ptr)
+        } else {
+            bytes.usePinned { kmpjs_run_bytecode(handle(), it.addressOf(0).reinterpret(), bytes.size, flags, out.ptr) }
+        }
+        out.toRaw()
+    }
+
+    actual fun registerModuleBytecode(bytes: ByteArray): RawValue = memScoped {
+        val out = alloc<kmpjs_value>()
+        if (bytes.isEmpty()) {
+            kmpjs_register_module_bytecode(handle(), null, 0, out.ptr)
+        } else {
+            bytes.usePinned { kmpjs_register_module_bytecode(handle(), it.addressOf(0).reinterpret(), bytes.size, out.ptr) }
+        }
+        out.toRaw()
+    }
+
     actual fun refToJson(ref: Long): RawValue = memScoped {
         val out = alloc<kmpjs_value>()
         kmpjs_ref_to_json(handle(), ref, out.ptr)
@@ -215,6 +239,24 @@ internal actual class NativeEngine actual constructor(config: JsEngineConfig, in
             } catch (_: Throwable) {
             }
         }
+    }
+}
+
+@OptIn(ExperimentalForeignApi::class)
+internal actual object NativeCompiler {
+    actual fun compile(source: String, fileName: String, flags: Int): Any = memScoped {
+        val out = alloc<kmpjs_value>()
+        val name = cString(fileName)
+        val code = Wtf8.encode(source)
+        val rc = if (code.isEmpty()) {
+            kmpjs_compile(null, 0, name, flags, out.ptr)
+        } else {
+            code.usePinned { kmpjs_compile(it.addressOf(0), code.size, name, flags, out.ptr) }
+        }
+        val result: Any = if (rc == 0) out.str?.readBytes(out.str_len) ?: ByteArray(0) else out.toRaw()
+        kmpjs_free(out.str)
+        kmpjs_free(out.stack)
+        result
     }
 }
 

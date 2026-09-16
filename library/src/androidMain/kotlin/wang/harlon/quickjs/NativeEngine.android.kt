@@ -52,7 +52,20 @@ internal actual class NativeEngine actual constructor(config: JsEngineConfig, in
     actual fun evalModule(source: String, name: String, flags: Int): RawValue =
         result(NativeBridge.nativeEvalModule(ptr, Wtf8.encode(source), Wtf8.encode(name), flags))
 
+    actual fun runBytecode(bytes: ByteArray, flags: Int): RawValue = result(NativeBridge.nativeRunBytecode(ptr, bytes, flags))
+
+    actual fun registerModuleBytecode(bytes: ByteArray): RawValue = result(NativeBridge.nativeRegisterModuleBytecode(ptr, bytes))
+
     actual fun stats(): LongArray = NativeBridge.nativeStats(ptr) ?: throw JsException("native call failed")
 
     actual fun dumpMemory(): RawValue = result(NativeBridge.nativeDumpMemory(ptr))
+}
+
+internal actual object NativeCompiler {
+    actual fun compile(source: String, fileName: String, flags: Int): Any =
+        when (val r = NativeBridge.nativeCompile(Wtf8.encode(source), Wtf8.encode(fileName), flags)) {
+            is ByteArray -> r
+            is NativeValue -> r.toRaw()
+            else -> throw JsException("native compile failed")
+        }
 }

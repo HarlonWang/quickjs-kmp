@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-#define KMPJS_ABI_VERSION 5
+#define KMPJS_ABI_VERSION 6
 
 typedef struct kmpjs_engine kmpjs_engine;
 
@@ -114,6 +114,33 @@ int32_t kmpjs_register_module(kmpjs_engine *e, const char *name, const char *cod
 /* Compiles and evaluates a module. The result is the module namespace as a KMPJS_TAG_REF once the
    module has run; a module still awaiting at top level comes back as a KMPJS_REF_PROMISE ref. */
 int32_t kmpjs_eval_module(kmpjs_engine *e, const char *code, int32_t code_len, const char *name, int32_t flags, kmpjs_value *out);
+
+/* ---- precompiled bytecode ----
+   Bytecode is the engine's JS_WriteObject output behind a small header that binds it to the exact
+   engine commit (native/UPSTREAM). The format is word-size independent. Nothing else is validated:
+   only load what this SDK compiled. */
+
+#define KMPJS_BYTECODE_HEADER_SIZE 52
+
+enum {
+    KMPJS_COMPILE_MODULE = 1,       /* compile as an ES module instead of a script */
+    KMPJS_COMPILE_STRIP_SOURCE = 2, /* drop the source text (stack traces keep line numbers) */
+    KMPJS_COMPILE_STRIP_DEBUG = 4,  /* drop all debug information */
+};
+
+/* Compiles without an engine. On success returns 0 with out->str/str_len holding the bytecode;
+   on failure -1 with out->str the message and out->stack the location. Both payloads come from
+   kmpjs_alloc and belong to the caller: release them with kmpjs_free. */
+int32_t kmpjs_compile(const char *code, int32_t code_len, const char *filename, int32_t flags, kmpjs_value *out);
+
+/* Runs bytecode: a script yields its completion value, a module its namespace (or a pending
+   promise ref), exactly like kmpjs_eval / kmpjs_eval_module on the source. Can be called any
+   number of times; a module claims its compiled name like kmpjs_eval_module does. */
+int32_t kmpjs_run_bytecode(kmpjs_engine *e, const uint8_t *buf, int32_t len, int32_t flags, kmpjs_value *out);
+
+/* Registers a precompiled module under the name it was compiled with; on success *out is that name
+   as a KMPJS_TAG_STRING. The bytecode is read right away, so an engine mismatch is reported here. */
+int32_t kmpjs_register_module_bytecode(kmpjs_engine *e, const uint8_t *buf, int32_t len, kmpjs_value *out);
 
 /* Safe to call from any thread while the engine is alive. Stops the evaluation in
    progress; a call while no evaluation runs is a no-op. */

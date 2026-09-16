@@ -29,6 +29,8 @@ commonMain      JsEngine / JsValue / JsRef / JsRuntime / JsException（expect �
 
 **模块只认名字表。** `registerModule` 存源码，`JS_SetModuleLoaderFunc` 的 loader 在第一次 import 时查表编译并设 `import.meta.url`，normalize 原样返回说明符。`evaluateModule` 先 COMPILE_ONLY 记下 `JSModuleDef*` 再 `JS_EvalFunction`，得到的 Promise 走 `finish` 的排空与解包，fulfilled 时用记下的 `JSModuleDef*` 取 namespace 代替 Promise 的值。
 
+**字节码是引擎序列化加一个头。** `kmpjs_compile` 在临时 Runtime 里 `JS_Eval(COMPILE_ONLY)` 再 `JS_WriteObject`，前置 52 字节头（magic、种类、上游 commit）；`kmpjs_run_bytecode` 核对头后 `JS_ReadObject`，脚本直接 `JS_EvalFunction`，模块先 `JS_ResolveModule` 再走与 `kmpjs_eval_module` 相同的收尾。字节码模块按编译时的名字注册；名字先在裸 context 里读出来做查重，再读进引擎，因为读入引擎即入缓存、无法撤销。
+
 **引擎核心没有 `console`。** `console.log`、`print`、`performance.now` 由 shim 挂到全局对象上（`quickjs-libc` 不链接），`console.log` 走 `JsEngineConfig.logger`，非字符串参数用引擎的 `JS_PrintValue` 格式化。
 
 ## 运行时约束

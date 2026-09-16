@@ -118,7 +118,9 @@ final class wang.harlon.quickjs/JsEngine : kotlin/AutoCloseable { // wang.harlon
     final fun evaluateModule(kotlin/String, kotlin/String = ...): wang.harlon.quickjs/JsRef // wang.harlon.quickjs/JsEngine.evaluateModule|evaluateModule(kotlin.String;kotlin.String){}[0]
     final fun interrupt() // wang.harlon.quickjs/JsEngine.interrupt|interrupt(){}[0]
     final fun registerFunction(kotlin/String, wang.harlon.quickjs/ObjectTransport = ..., wang.harlon.quickjs/JsHostFunction) // wang.harlon.quickjs/JsEngine.registerFunction|registerFunction(kotlin.String;wang.harlon.quickjs.ObjectTransport;wang.harlon.quickjs.JsHostFunction){}[0]
+    final fun registerModule(kotlin/ByteArray): kotlin/String // wang.harlon.quickjs/JsEngine.registerModule|registerModule(kotlin.ByteArray){}[0]
     final fun registerModule(kotlin/String, kotlin/String) // wang.harlon.quickjs/JsEngine.registerModule|registerModule(kotlin.String;kotlin.String){}[0]
+    final fun runBytecode(kotlin/ByteArray, wang.harlon.quickjs/ObjectTransport = ...): wang.harlon.quickjs/JsValue // wang.harlon.quickjs/JsEngine.runBytecode|runBytecode(kotlin.ByteArray;wang.harlon.quickjs.ObjectTransport){}[0]
     final fun stats(): wang.harlon.quickjs/JsEngineStats // wang.harlon.quickjs/JsEngine.stats|stats(){}[0]
 }
 
@@ -204,6 +206,22 @@ final class wang.harlon.quickjs/JsRuntime : kotlin/AutoCloseable { // wang.harlo
     final suspend fun registerFunction(kotlin/String, wang.harlon.quickjs/ObjectTransport = ..., wang.harlon.quickjs/JsHostFunction) // wang.harlon.quickjs/JsRuntime.registerFunction|registerFunction(kotlin.String;wang.harlon.quickjs.ObjectTransport;wang.harlon.quickjs.JsHostFunction){}[0]
     final suspend fun registerModule(kotlin/String, kotlin/String) // wang.harlon.quickjs/JsRuntime.registerModule|registerModule(kotlin.String;kotlin.String){}[0]
     final suspend fun shutdown() // wang.harlon.quickjs/JsRuntime.shutdown|shutdown(){}[0]
+}
+
+final object wang.harlon.quickjs/JsBytecode { // wang.harlon.quickjs/JsBytecode|null[0]
+    final fun compile(kotlin/String, kotlin/String = ..., kotlin/Boolean = ..., wang.harlon.quickjs/JsBytecode.Strip = ...): kotlin/ByteArray // wang.harlon.quickjs/JsBytecode.compile|compile(kotlin.String;kotlin.String;kotlin.Boolean;wang.harlon.quickjs.JsBytecode.Strip){}[0]
+
+    final enum class Strip : kotlin/Enum<wang.harlon.quickjs/JsBytecode.Strip> { // wang.harlon.quickjs/JsBytecode.Strip|null[0]
+        enum entry DEBUG // wang.harlon.quickjs/JsBytecode.Strip.DEBUG|null[0]
+        enum entry NONE // wang.harlon.quickjs/JsBytecode.Strip.NONE|null[0]
+        enum entry SOURCE // wang.harlon.quickjs/JsBytecode.Strip.SOURCE|null[0]
+
+        final val entries // wang.harlon.quickjs/JsBytecode.Strip.entries|#static{}entries[0]
+            final fun <get-entries>(): kotlin.enums/EnumEntries<wang.harlon.quickjs/JsBytecode.Strip> // wang.harlon.quickjs/JsBytecode.Strip.entries.<get-entries>|<get-entries>#static(){}[0]
+
+        final fun valueOf(kotlin/String): wang.harlon.quickjs/JsBytecode.Strip // wang.harlon.quickjs/JsBytecode.Strip.valueOf|valueOf#static(kotlin.String){}[0]
+        final fun values(): kotlin/Array<wang.harlon.quickjs/JsBytecode.Strip> // wang.harlon.quickjs/JsBytecode.Strip.values|values#static(){}[0]
+    }
 }
 
 final object wang.harlon.quickjs/QuickJs { // wang.harlon.quickjs/QuickJs|null[0]
