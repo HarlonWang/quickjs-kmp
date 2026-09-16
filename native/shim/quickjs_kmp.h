@@ -72,7 +72,8 @@ typedef void (*kmpjs_log_fn)(void *user, const char *msg, int32_t len);
 typedef void (*kmpjs_rejection_fn)(void *user, const kmpjs_value *reason);
 /* Asked for a module the name table does not know, at its first import (static or dynamic), on the
    engine thread and inside the importing call: it must return synchronously and must not call back
-   into the engine. Fill *result with KMPJS_TAG_STRING (module source), KMPJS_TAG_BINARY (module
+   into the engine. A module it supplies is cached under that name and never asked again; an unknown
+   or failed answer spends nothing, so the next import of that name asks again. Fill *result with KMPJS_TAG_STRING (module source), KMPJS_TAG_BINARY (module
    bytecode compiled under exactly `name`) or KMPJS_TAG_UNDEFINED (unknown, the import throws
    ReferenceError) and return 0; or return non-zero with result->str holding an error message that
    is thrown as an Error. Payloads come from kmpjs_alloc(); the engine frees them. */

@@ -143,7 +143,9 @@ class JsModuleTest {
     @Test
     fun loaderMissesAndFailuresSurfaceAtTheImport() {
         val wrongName = JsBytecode.compile("export const x = 1;", "other", module = true)
+        val asked = mutableListOf<String>()
         val loader = { name: String ->
+            asked += name
             when (name) {
                 "boom" -> throw IllegalStateException("no network")
                 "renamed" -> JsModuleSource.Bytecode(wrongName)
@@ -160,9 +162,12 @@ class JsModuleTest {
             assertTrue(renamed.message.orEmpty().contains("compiled as 'other'"), "message was: ${renamed.message}")
             val script = assertFailsWith<JsException> { engine.evaluateModule("import 'script';") }
             assertTrue(script.message.orEmpty().contains("not a module"), "message was: ${script.message}")
-            // a failed load spends no name
+            // a miss or a failure spends no name: the next import asks again, and registering it later works
+            assertFailsWith<JsException> { engine.evaluateModule("import 'missing';") }
+            assertEquals(2, asked.count { it == "missing" })
             engine.registerModule("boom", "export const ok = true;")
             engine.evaluateModule("import { ok } from 'boom'; export default ok;").use { assertEquals(JsValue.Bool(true), it.get("default")) }
+            assertEquals(1, asked.count { it == "boom" })
         }
     }
 

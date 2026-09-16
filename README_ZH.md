@@ -79,7 +79,7 @@ JsEngine(JsEngineConfig(moduleScheme = "app")).use { engine ->
 
 `evaluateModule` 以 `JsRef` 返回 namespace，之后该模块可以按名字被 import。注册的模块在第一次 import 时编译、只执行一次；注册名与求值名共用一个命名空间，任何名字占用两次都会抛异常（尖括号形式的名字如默认的 `<module>` 视为匿名）。支持顶层 `await`：调用返回时仍未完成的模块以带 `isPromise` 的 `JsRef` 返回。每次 `evaluateModule` 都会把编译后的模块留在引擎里直到引擎关闭。
 
-名字表查不到的名字可以交给 `JsEngineConfig.moduleLoader`：每个名字在第一次 import（静态或动态 `import()`）时问一次，回答 `JsModuleSource.Text` 或 `JsModuleSource.Bytecode`（必须以该名字编译）或 `null` 表示不存在；已注册的名字不会问到它。loader 在引擎线程上、在发起 import 的那次调用内同步执行，不能回调引擎，所以它只应是缓存查找：先下载好，再让脚本 `import()`。
+名字表查不到的名字可以交给 `JsEngineConfig.moduleLoader`：在第一次 import（静态或动态 `import()`）时问它，回答 `JsModuleSource.Text` 或 `JsModuleSource.Bytecode`（必须以该名字编译）或 `null` 表示不存在；给出的模块进缓存、不再问，`null` 或抛异常不占名，下次 import 同名会再问。已注册的名字不会问到它。loader 在引擎线程上、在发起 import 的那次调用内同步执行，不能回调引擎，所以它只应是缓存查找：先下载好，再让脚本 `import()`。
 
 ```kotlin
 val cache = mutableMapOf<String, ByteArray>() // 宿主在脚本 import 之前填好
