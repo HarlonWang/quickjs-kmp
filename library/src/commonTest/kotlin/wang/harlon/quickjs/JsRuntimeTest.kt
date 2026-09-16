@@ -42,6 +42,36 @@ class JsRuntimeTest {
         }
     }
 
+    // 字节码注册也读栈：引擎在别的线程创建时，注册入口要先刷新栈顶（Android 上曾报 "stack overflow"，2026-09-16）
+    @OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class)
+    @Test
+    fun bytecodeRegisteredOnAnotherThreadThanTheEngineWasCreatedOn() = runTest {
+        val creator = newSingleThreadContext("creator")
+        val worker = newSingleThreadContext("worker")
+        try {
+            val nested = buildString {
+                append("export function deep() { return ")
+                repeat(40) { append("(() => ") }
+                append("1")
+                repeat(40) { append(")()") }
+                append("; }")
+            }
+            val bytecode = JsBytecode.compile(nested, "deep", module = true)
+            val engine = withContext(creator) { JsEngine() }
+            try {
+                withContext(worker) {
+                    assertEquals("deep", engine.registerModule(bytecode))
+                    engine.evaluateModule("import { deep } from 'deep'; export const v = deep();").use { assertEquals(JsValue.Num(1), it.get("v")) }
+                }
+            } finally {
+                withContext(creator) { engine.close() }
+            }
+        } finally {
+            creator.close()
+            worker.close()
+        }
+    }
+
     // 走 Dispatchers.Default 跳出 runTest 的虚拟时间，超时与真实阻塞求值才能对上
     private fun realTime(block: suspend () -> Unit) = runTest(timeout = 60.seconds) {
         withContext(Dispatchers.Default) { block() }
