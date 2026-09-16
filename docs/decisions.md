@@ -12,7 +12,7 @@ TinyUI（ADR-005）需要 ES2025 + 原生 ESM + 微任务 + 可预编译的引�
 
 ## 上游：bellard/quickjs 本尊，git subtree 锁 commit `04be246`（版本 2026-06-04）
 
-不选 quickjs-ng：TinyUI 只需 ES2025 与本文列出的 API，本尊全有；作者 2024 年起稳定发版；单一上游可追溯。ng 的 API 正在缓慢分化，作为将来可切换选项——shim 的 API 面很小。上游目录 `native/quickjs/`（bellard 仓无 tag，锁 commit 记在 `native/UPSTREAM`，同 mquickjs-kmp）。
+不选 quickjs-ng：TinyUI 只需 ES2025 与本文列出的 API，本尊全有；作者 2024 年起稳定发版；单一上游可追溯。ng 的 API 正在缓慢分化，不评估切换：本仓不追 ng 独有特性，只跟本尊。上游目录 `native/quickjs/`（bellard 仓无 tag，锁 commit 记在 `native/UPSTREAM`，同 mquickjs-kmp）。
 
 ## 编译范围：只编引擎核心，不链 `quickjs-libc`；`console` 与 `performance.now` 由 shim 提供
 

@@ -33,4 +33,3 @@
 
 - Kotlin 回调式 module loader（热下发）
 - 多 Context（若有隔离但共享堆的需求）
-- quickjs-ng 切换评估
