@@ -60,7 +60,7 @@ ES2025 下 JSON 过桥的损失面比 ES5 大得多，这是默认 `ObjectTransp
 
 ## Runtime / Context：一个 `JsEngine` = 一个 Runtime + 一个 Context
 
-不暴露多 Context：TinyUI 每页一 Runtime（限额、中断都是 Runtime 级），通用用户要隔离也应建新引擎。`JsEngineConfig` 暴露 `memoryLimit` / `maxStackSize` / `gcThreshold`；`stats()` 映射 `JS_ComputeMemoryUsage`。`maxStackSize` 默认 256 KB 而不是 QuickJS 自带的 1 MB：栈溢出检查只在限额小于线程实际栈时才起作用，Apple 非主线程与 Kotlin/Native worker 默认栈 512 KB，用 1 MB 等于没检查，深递归直接段错误而非 `RangeError`。文档写明「必须小于运行 JsRuntime 的线程栈」。代价是递归深度：Release 构建实测 256 KB 约合 270 层 JS 函数嵌套，1 MB 约 1090 层；需要更深递归的宿主在线程栈允许时自行调大。`stats()` 的内存字段直接映射 `JS_ComputeMemoryUsage`：已用字节、限额、对象 / 字符串 / atom / 函数计数，够做泄漏与基线测量，不为了「全」把三十多个字段都搬过来。
+不暴露多 Context，已评估不做（2026-09-16 实测，macOS arm64 `-Os`）：Runtime + Context 基线仅 155 KB，同 Runtime 内每加一个 Context 省约 100 KB、0.05 ms，对 8 MB 量级的页面工作集不构成收益；模块缓存 `loaded_modules` 挂在 JSContext 上，运行时模块无法跨页共享；而 `memoryLimit` / interrupt / 微任务队列 `job_list` / rejection tracker / GC 全是 Runtime 级，多 Context 会让一页的 OOM、排空与中断波及所有页，对象跨 context 还会带来 realm 混淆。TinyUI 每页一 Runtime，通用用户要隔离也应建新引擎。`JsEngineConfig` 暴露 `memoryLimit` / `maxStackSize` / `gcThreshold`；`stats()` 映射 `JS_ComputeMemoryUsage`。`maxStackSize` 默认 256 KB 而不是 QuickJS 自带的 1 MB：栈溢出检查只在限额小于线程实际栈时才起作用，Apple 非主线程与 Kotlin/Native worker 默认栈 512 KB，用 1 MB 等于没检查，深递归直接段错误而非 `RangeError`。文档写明「必须小于运行 JsRuntime 的线程栈」。代价是递归深度：Release 构建实测 256 KB 约合 270 层 JS 函数嵌套，1 MB 约 1090 层；需要更深递归的宿主在线程栈允许时自行调大。`stats()` 的内存字段直接映射 `JS_ComputeMemoryUsage`：已用字节、限额、对象 / 字符串 / atom / 函数计数，够做泄漏与基线测量，不为了「全」把三十多个字段都搬过来。
 
 ## 取消 / 超时 / 线程：`JS_SetInterruptHandler` 轮询原子标志，每次入口先 `JS_UpdateStackTop`
 
