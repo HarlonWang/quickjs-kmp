@@ -26,7 +26,7 @@ import platform.posix.popen
  * TinyUI checkout that has `.engine-qjs/qjs` built; skipped otherwise. Numbers go to stdout.
  */
 @OptIn(ExperimentalForeignApi::class)
-class TinyUiBenchTest {
+class TinyUIBenchTest {
     private val benchDir: String? = getenv("TINYUI_BENCH_DIR")?.toKString()
 
     private fun benchFile(name: String): String = readFile("$benchDir/$name")
@@ -49,7 +49,7 @@ class TinyUiBenchTest {
 
     @Test
     fun patchStreamThroughTheBridgeMatchesQjs() {
-        val dir = benchDir ?: return println("TinyUiBenchTest skipped: TINYUI_BENCH_DIR not set")
+        val dir = benchDir ?: return println("TinyUIBenchTest skipped: TINYUI_BENCH_DIR not set")
         for (scenario in listOf("S1", "S2", "S3", "S4")) {
             val expected = qjsVerifyStream(scenario)
             // harness-driven, patch JSON crossing through a host function
@@ -69,12 +69,12 @@ class TinyUiBenchTest {
             }
             assertEquals(expected, driven, "$scenario: Kotlin-driven transactions differ from qjs")
         }
-        println("TinyUiBenchTest: patch streams match qjs for S1..S4 ($dir)")
+        println("TinyUIBenchTest: patch streams match qjs for S1..S4 ($dir)")
     }
 
     @Test
     fun bridgeShapedScenarios() {
-        benchDir ?: return println("TinyUiBenchTest skipped: TINYUI_BENCH_DIR not set")
+        benchDir ?: return println("TinyUIBenchTest skipped: TINYUI_BENCH_DIR not set")
         val rows = ArrayList<String>()
         for (scenario in listOf("S1", "S2", "S3", "S4")) {
             val jsOnly = median(5) { jsOnlyRun(scenario) }

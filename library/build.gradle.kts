@@ -401,14 +401,14 @@ tasks.withType<CMakeBuild>().configureEach {
     cmake.set(cmakeExecutable)
 }
 
-// TinyUI 验收基准：跑 release 测试二进制里的 TinyUiBenchTest，需要 TINYUI_BENCH_DIR 指向 TinyUI 的 bench/ 目录
-tasks.register<Exec>("tinyUiBench") {
+// TinyUI 验收基准：跑 release 测试二进制里的 TinyUIBenchTest，需要 TINYUI_BENCH_DIR 指向 TinyUI 的 bench/ 目录
+tasks.register<Exec>("tinyUIBench") {
     group = "verification"
-    description = "Runs TinyUiBenchTest from the release test binary (set TINYUI_BENCH_DIR)"
+    description = "Runs TinyUIBenchTest from the release test binary (set TINYUI_BENCH_DIR)"
     val link = tasks.named("linkReleaseReleaseTestMacosArm64")
     dependsOn(link)
     executable = layout.buildDirectory.file("bin/macosArm64/releaseReleaseTest/release.kexe").get().asFile.absolutePath
-    args("--ktest_filter=wang.harlon.quickjs.TinyUiBenchTest.*")
+    args("--ktest_filter=wang.harlon.quickjs.TinyUIBenchTest.*")
     providers.environmentVariable("TINYUI_BENCH_DIR").orNull?.let { environment("TINYUI_BENCH_DIR", it) }
 }
 
