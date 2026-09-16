@@ -105,9 +105,11 @@ class JsEngine(private val config: JsEngineConfig = JsEngineConfig()) : AutoClos
 
     /**
      * Runs [bytecode] produced by [JsBytecode.compile]: a script yields its completion value like
-     * [evaluate], a module yields its namespace like [evaluateModule] (always a [JsRef]). Bytecode
-     * can be run any number of times, at any point in the engine's life.
-     * @throws JsException when the bytecode was built for another engine build, is corrupt, or throws
+     * [evaluate], a module yields its namespace like [evaluateModule] (always a [JsRef]). A script
+     * or an anonymously named module can be run any number of times, at any point in the engine's
+     * life; a named module claims its name like [evaluateModule] does and therefore runs once.
+     * @throws JsException when the bytecode was built for another engine build, is corrupt, throws,
+     * or is a named module whose name is already taken
      */
     fun runBytecode(bytecode: ByteArray, objects: ObjectTransport = ObjectTransport.JSON): JsValue {
         checkOpen()

@@ -432,8 +432,9 @@ static int32_t owned_exception(JSContext *ctx, kmpjs_value *out)
     size_t len;
     const char *p = JS_IsException(s) ? NULL : JS_ToCStringLen(ctx, &len, s);
 
-    owned_message(out, p ? p : "compilation failed");
-    if (p) {
+    if (!p) {
+        owned_message(out, "compilation failed");
+    } else {
         memset(out, 0, sizeof(*out));
         out->tag = KMPJS_TAG_EXCEPTION;
         out->str = kmpjs_alloc((int32_t)len);
@@ -541,39 +542,75 @@ done:
     return rc;
 }
 
-/* Checks the header and reads the object; *kind receives 0 for a script, 1 for a module. */
-static JSValue read_bytecode(kmpjs_engine *e, const uint8_t *buf, int32_t len, int *kind, kmpjs_value *out)
+/* Checks the header; *kind receives 0 for a script, 1 for a module, *body the serialized object. */
+static int32_t check_bytecode_header(kmpjs_engine *e, const uint8_t *buf, int32_t len, int *kind,
+                                     const uint8_t **body, size_t *body_len, kmpjs_value *out)
 {
     kmp_bc_header hdr;
-    JSValue obj;
 
-    if (len < (int32_t)sizeof(hdr) || memcmp(buf, "QJKB", 4) != 0) {
-        fail_message(e, out, "not QuickJS bytecode produced by this SDK");
-        return JS_EXCEPTION;
-    }
+    if (len < (int32_t)sizeof(hdr) || memcmp(buf, "QJKB", 4) != 0)
+        return fail_message(e, out, "not QuickJS bytecode produced by this SDK");
     memcpy(&hdr, buf, sizeof(hdr));
-    if (hdr.header_len != KMPJS_BYTECODE_HEADER_SIZE || hdr.kind > 1) {
-        fail_message(e, out, "unsupported bytecode header");
-        return JS_EXCEPTION;
-    }
+    if (hdr.header_len != KMPJS_BYTECODE_HEADER_SIZE || hdr.kind > 1)
+        return fail_message(e, out, "unsupported bytecode header");
     if (memcmp(hdr.upstream, KMPJS_UPSTREAM_COMMIT, sizeof(hdr.upstream)) != 0) {
         char msg[160];
         snprintf(msg, sizeof msg, "bytecode built for engine %.12s, this SDK embeds engine %.12s", hdr.upstream, KMPJS_UPSTREAM_COMMIT);
-        fail_message(e, out, msg);
-        return JS_EXCEPTION;
+        return fail_message(e, out, msg);
     }
     *kind = (int)hdr.kind;
-    obj = JS_ReadObject(e->ctx, buf + sizeof(hdr), (size_t)len - sizeof(hdr), JS_READ_OBJ_BYTECODE);
+    *body = buf + sizeof(hdr);
+    *body_len = (size_t)len - sizeof(hdr);
+    return 0;
+}
+
+/* Reads the object into the engine's context. */
+static JSValue read_bytecode_body(kmpjs_engine *e, const uint8_t *body, size_t body_len, int kind, kmpjs_value *out)
+{
+    JSValue obj = JS_ReadObject(e->ctx, body, body_len, JS_READ_OBJ_BYTECODE);
     if (JS_IsException(obj)) {
         exception_to_out(e, out);
         return JS_EXCEPTION;
     }
-    if ((*kind == 1) != (JS_VALUE_GET_TAG(obj) == JS_TAG_MODULE)) {
+    if ((kind == 1) != (JS_VALUE_GET_TAG(obj) == JS_TAG_MODULE)) {
         JS_FreeValue(e->ctx, obj);
         fail_message(e, out, "bytecode body does not match its header");
         return JS_EXCEPTION;
     }
     return obj;
+}
+
+/* Reading a module into the engine's context also caches it there for good, so a name check has
+   to happen before that: the name is read out of a throwaway bare context instead. Returns a
+   malloc'ed copy, or NULL with *out set. */
+static char *peek_module_name(kmpjs_engine *e, const uint8_t *body, size_t body_len, kmpjs_value *out)
+{
+    JSContext *scratch = JS_NewContextRaw(e->rt);
+    JSValue obj;
+    const char *name;
+    char *copy = NULL;
+
+    if (!scratch) {
+        fail_message(e, out, "out of memory");
+        return NULL;
+    }
+    obj = JS_ReadObject(scratch, body, body_len, JS_READ_OBJ_BYTECODE);
+    if (JS_IsException(obj)) {
+        JS_FreeValue(scratch, JS_GetException(scratch));
+        fail_message(e, out, "bytecode body is corrupt");
+    } else if (JS_VALUE_GET_TAG(obj) != JS_TAG_MODULE) {
+        JS_FreeValue(scratch, obj);
+        fail_message(e, out, "bytecode body does not match its header");
+    } else {
+        name = module_name_of(scratch, JS_VALUE_GET_PTR(obj));
+        copy = name ? strdup(name) : NULL;
+        JS_FreeCString(scratch, name);
+        JS_FreeValue(scratch, obj);
+        if (!copy)
+            fail_message(e, out, "out of memory");
+    }
+    JS_FreeContext(scratch);
+    return copy;
 }
 
 /* ---- interrupt state ---- */
@@ -1387,76 +1424,86 @@ int32_t kmpjs_eval_module(kmpjs_engine *e, const char *code, int32_t code_len, c
 int32_t kmpjs_run_bytecode(kmpjs_engine *e, const uint8_t *buf, int32_t len, int32_t flags, kmpjs_value *out)
 {
     int outermost = run_begin(e);
-    int kind;
-    JSValue obj = read_bytecode(e, buf, len, &kind, out);
+    int kind, anonymous;
+    const uint8_t *body;
+    size_t body_len;
+    char *name = NULL;
+    JSValue obj;
     JSModuleDef *m;
-    const char *name;
 
-    if (JS_IsException(obj)) {
-        run_end(e, outermost);
-        return -1;
-    }
-    if (kind == 0)
+    if (check_bytecode_header(e, buf, len, &kind, &body, &body_len, out))
+        goto fail;
+    if (kind == 0) {
+        obj = read_bytecode_body(e, body, body_len, kind, out);
+        if (JS_IsException(obj))
+            goto fail;
         return finish(e, outermost, JS_EvalFunction(e->ctx, obj), flags, 1, NULL, out);
+    }
+    name = peek_module_name(e, body, body_len, out);
+    if (!name)
+        goto fail;
+    anonymous = name[0] == '<';
+    if (!anonymous && module_name_taken(e, name, out))
+        goto fail;
+    obj = read_bytecode_body(e, body, body_len, kind, out);
+    if (JS_IsException(obj))
+        goto fail;
     m = JS_VALUE_GET_PTR(obj);
-    name = module_name_of(e->ctx, m);
-    if (!name || set_import_meta(e, m, name) || JS_ResolveModule(e->ctx, obj) < 0) {
-        JS_FreeCString(e->ctx, name);
+    if (set_import_meta(e, m, name) || JS_ResolveModule(e->ctx, obj) < 0) {
         JS_FreeValue(e->ctx, obj);
+        free(name);
         return finish(e, outermost, JS_EXCEPTION, flags, 0, NULL, out);
     }
-    if (name[0] != '<' && (module_name_taken(e, name, out) || claim_module_name(e, name, KMP_MODULE_EVALUATED, NULL, 0, out))) {
-        JS_FreeCString(e->ctx, name);
+    if (!anonymous && claim_module_name(e, name, KMP_MODULE_EVALUATED, NULL, 0, out)) {
         JS_FreeValue(e->ctx, obj);
-        run_end(e, outermost);
-        return -1;
+        goto fail;
     }
-    JS_FreeCString(e->ctx, name);
+    free(name);
     return finish(e, outermost, JS_EvalFunction(e->ctx, obj), flags | KMPJS_FLAG_REF_OBJECTS, 1, m, out);
+fail:
+    free(name);
+    run_end(e, outermost);
+    return -1;
 }
 
-/* The module is read now rather than at the first import: the engine caches it under its compiled
-   name from this point on. The name is only known after reading, so a rejected duplicate leaves an
-   inert copy in the cache (the earlier definition keeps winning); that is why the name is taken from
-   the bytecode instead of being checked against a caller-supplied one. */
+/* The module is read into the engine right away (the engine caches it under its compiled name from
+   then on), but only after its name passed the check: a rejected registration must not leave a
+   definition behind that would shadow a source module still waiting for its first import. */
 int32_t kmpjs_register_module_bytecode(kmpjs_engine *e, const uint8_t *buf, int32_t len, kmpjs_value *out)
 {
     int kind;
+    const uint8_t *body;
+    size_t body_len;
+    char *name;
     JSValue obj;
-    JSModuleDef *m;
-    const char *name;
     int32_t rc = -1;
 
-    obj = read_bytecode(e, buf, len, &kind, out);
-    if (JS_IsException(obj))
+    if (check_bytecode_header(e, buf, len, &kind, &body, &body_len, out))
         return -1;
-    if (kind != 1) {
-        JS_FreeValue(e->ctx, obj);
+    if (kind != 1)
         return fail_message(e, out, "bytecode is a script, not a module");
-    }
-    m = JS_VALUE_GET_PTR(obj);
-    name = module_name_of(e->ctx, m);
-    if (!name) {
-        JS_FreeValue(e->ctx, obj);
-        exception_to_out(e, out);
+    name = peek_module_name(e, body, body_len, out);
+    if (!name)
         return -1;
-    }
     if (name[0] == '<' || !name[0]) {
         fail_message(e, out, "bytecode module has an anonymous name; compile it with a real one");
-    } else if (module_name_taken(e, name, out)) {
-        /* message already set */
-    } else if (set_import_meta(e, m, name)) {
-        exception_to_out(e, out);
-    } else if (claim_module_name(e, name, KMP_MODULE_BYTECODE, NULL, 0, out) == 0) {
-        buf_reset(&e->out_str);
-        buf_append(&e->out_str, name, strlen(name));
-        memset(out, 0, sizeof(*out));
-        out->tag = KMPJS_TAG_STRING;
-        publish(&e->out_str, &out->str, &out->str_len);
-        rc = 0;
+    } else if (!module_name_taken(e, name, out)) {
+        obj = read_bytecode_body(e, body, body_len, kind, out);
+        if (!JS_IsException(obj)) {
+            if (set_import_meta(e, JS_VALUE_GET_PTR(obj), name)) {
+                exception_to_out(e, out);
+            } else if (claim_module_name(e, name, KMP_MODULE_BYTECODE, NULL, 0, out) == 0) {
+                buf_reset(&e->out_str);
+                buf_append(&e->out_str, name, strlen(name));
+                memset(out, 0, sizeof(*out));
+                out->tag = KMPJS_TAG_STRING;
+                publish(&e->out_str, &out->str, &out->str_len);
+                rc = 0;
+            }
+            JS_FreeValue(e->ctx, obj);
+        }
     }
-    JS_FreeCString(e->ctx, name);
-    JS_FreeValue(e->ctx, obj);
+    free(name);
     return rc;
 }
 

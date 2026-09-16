@@ -59,6 +59,13 @@ class JsBytecodeTest {
         val missing = JsBytecode.compile("import 'nowhere';", "bc-missing", module = true)
         assertTrue(assertFailsWith<JsException> { engine.runBytecode(missing) }.message.orEmpty().contains("'nowhere' is not registered"))
         assertTrue(assertFailsWith<JsException> { engine.registerModule(JsBytecode.compile("1", "script")) }.message.orEmpty().contains("not a module"))
+        engine.registerModule("lazy", "export const from = 'source';")
+        val shadow = JsBytecode.compile("export const from = 'bytecode';", "lazy", module = true)
+        assertTrue(assertFailsWith<JsException> { engine.registerModule(shadow) }.message.orEmpty().contains("already registered"))
+        assertTrue(assertFailsWith<JsException> { engine.runBytecode(shadow) }.message.orEmpty().contains("already registered"))
+        engine.evaluateModule("import { from } from 'lazy'; export default from;").use { assertEquals(JsValue.Str("source"), it.get("default")) }
+        assertIs<JsRef>(engine.runBytecode(JsBytecode.compile("export const a = 1;", module = true))).close()
+        assertIs<JsRef>(engine.runBytecode(JsBytecode.compile("export const a = 1;", module = true))).close()
         assertTrue(assertFailsWith<JsException> { engine.registerModule(JsBytecode.compile("export const a = 1;", module = true)) }.message.orEmpty().contains("anonymous"))
         assertEquals(0, engine.stats().liveRefs)
     }

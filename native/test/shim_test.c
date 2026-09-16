@@ -287,6 +287,16 @@ static void test_bytecode(void)
     CHECK(kmpjs_register_module_bytecode(g, (const uint8_t *)bc.str, bc.str_len, &out) != 0 && str_has(&out, "not a module"));
     CHECK(kmpjs_register_module_bytecode(g, (const uint8_t *)mbc.str, mbc.str_len, &out) == 0 && out.tag == KMPJS_TAG_STRING && str_is(&out, "bc-page"));
     CHECK(kmpjs_register_module_bytecode(g, (const uint8_t *)mbc.str, mbc.str_len, &out) != 0 && str_has(&out, "already registered"));
+    /* a rejected registration must not shadow a source module that has not been imported yet */
+    CHECK(kmpjs_register_module(g, "lazy", S("export const from = 'source';"), &out) == 0);
+    CHECK(kmpjs_compile(S("export const from = 'bytecode';"), "lazy", KMPJS_COMPILE_MODULE, &out) == 0);
+    CHECK(kmpjs_register_module_bytecode(g, (const uint8_t *)out.str, out.str_len, &v) != 0 && str_has(&v, "already registered"));
+    CHECK(kmpjs_run_bytecode(g, (const uint8_t *)out.str, out.str_len, 0, &v) != 0 && str_has(&v, "already registered"));
+    kmpjs_free((void *)out.str);
+    CHECK(kmpjs_eval_module(g, S("import { from } from 'lazy'; export default from;"), "<module>", 0, &v) == 0);
+    ns = v.ref;
+    CHECK(kmpjs_ref_get(g, ns, "default", 0, &v) == 0 && str_is(&v, "source"));
+    kmpjs_ref_release(g, ns);
     CHECK(kmpjs_compile(S("export const anon = 1;"), "<module>", KMPJS_COMPILE_MODULE, &out) == 0);
     CHECK(kmpjs_register_module_bytecode(g, (const uint8_t *)out.str, out.str_len, &v) != 0 && str_has(&v, "anonymous"));
     kmpjs_free((void *)out.str);
