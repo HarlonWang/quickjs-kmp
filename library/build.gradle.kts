@@ -142,7 +142,7 @@ val cmakeExecutable: Provider<String> = providers.environmentVariable("PATH").ma
 }
 
 val nativeSources = fileTree(nativeDir) {
-    include("CMakeLists.txt", "UPSTREAM", "quickjs/**", "shim/**", "jni/**", "patches/**", "test/**")
+    include("CMakeLists.txt", "UPSTREAM", "quickjs/**", "shim/**", "jni/**", "patches/**", "test/**", "tools/**")
 }
 
 val androidSdkDir: Provider<String> = providers
@@ -245,6 +245,50 @@ val buildNativeShimTest = tasks.register<CMakeBuild>("buildNativeShimTest") {
     cmakeArgs.set(listOf("-DQJS_SHIM_TEST=ON", "-DQJS_ASAN=ON", "-DCMAKE_BUILD_TYPE=Debug", "-DCMAKE_RUNTIME_OUTPUT_DIRECTORY=" + nativeBuildDir.get().dir("shim-test/bin").asFile.absolutePath))
 }
 
+// 宿主命令行编译器 qjsc-kmp：使用方在构建期把脚本编成字节码（docs/native-build.md）
+val buildHostTools = tasks.register<CMakeBuild>("buildHostTools") {
+    group = "build"
+    description = "Builds native/tools (qjsc-kmp) for the host"
+    sources.from(nativeSources)
+    sourceDir.set(nativeDir)
+    cmakeBuildDir.set(nativeBuildDir.map { it.dir("host-tools/cmake") })
+    libDir.set(nativeBuildDir.map { it.dir("host-tools/bin") })
+    cmakeArgs.set(listOf("-DQJS_TOOLS=ON", "-DCMAKE_RUNTIME_OUTPUT_DIRECTORY=" + nativeBuildDir.get().dir("host-tools/bin").asFile.absolutePath))
+}
+
+abstract class HostToolsTest @Inject constructor(private val execOps: ExecOperations) : DefaultTask() {
+    @get:InputDirectory
+    abstract val binDir: DirectoryProperty
+
+    @get:OutputDirectory
+    abstract val workDir: DirectoryProperty
+
+    @TaskAction
+    fun run() {
+        val dir = workDir.get().asFile.apply { mkdirs() }
+        val tool = binDir.get().file("qjsc-kmp").asFile.absolutePath
+        val script = dir.resolve("smoke.js").apply { writeText("export const answer = 6 * 7;\n") }
+        val out = dir.resolve("smoke.bin")
+        execOps.exec { commandLine(tool, "-m", "-n", "smoke", "--strip-source", "-o", out.absolutePath, script.absolutePath) }
+        val bytes = out.readBytes()
+        check(bytes.size > 52 && bytes.copyOfRange(0, 4).decodeToString() == "QJKB") { "qjsc-kmp produced ${bytes.size} bytes without the expected header" }
+        val bad = dir.resolve("bad.js").apply { writeText("export const = ;\n") }
+        val failure = execOps.exec {
+            commandLine(tool, "-m", bad.absolutePath)
+            isIgnoreExitValue = true
+            errorOutput = ByteArrayOutputStream()
+        }
+        check(failure.exitValue == 1) { "qjsc-kmp exited ${failure.exitValue} on a syntax error" }
+    }
+}
+
+val hostToolsTest = tasks.register<HostToolsTest>("hostToolsTest") {
+    group = "verification"
+    description = "Compiles a module with qjsc-kmp and checks the output header"
+    binDir.set(buildHostTools.flatMap { it.libDir })
+    workDir.set(layout.buildDirectory.dir("host-tools-test"))
+}
+
 abstract class RunShimTest @Inject constructor(private val execOps: ExecOperations) : DefaultTask() {
     @get:InputDirectory
     abstract val binDir: DirectoryProperty
@@ -277,7 +321,7 @@ val nativeShimTest = tasks.register<RunShimTest>("nativeShimTest") {
 }
 
 tasks.named("check") {
-    dependsOn(nativeShimTest)
+    dependsOn(nativeShimTest, hostToolsTest)
 }
 
 kotlin {

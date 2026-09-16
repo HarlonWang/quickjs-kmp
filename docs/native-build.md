@@ -9,6 +9,7 @@ native/
 ├── patches/     对上游的补丁，构建时 apply
 ├── shim/        quickjs_kmp.c/.h
 ├── jni/         JNI 胶水，只服务 Android
+├── tools/       宿主命令行工具 qjsc-kmp
 └── test/        shim 的 C 测试
 ```
 
@@ -46,6 +47,17 @@ Android host test 走宿主编译的 JNI 库：`buildNativeHostJni` 以 `-DQJS_H
 ## 调试宿主：ASan 的 shim 测试
 
 `native/test/shim_test.c` 是直接对 C API 的断言测试，由 `buildNativeShimTest` 以 `-DQJS_SHIM_TEST=ON -DQJS_ASAN=ON -DCMAKE_BUILD_TYPE=Debug` 在宿主上编译，`nativeShimTest` 运行并挂在 `check` 下、CI 门禁里。ASan 抓越界与悬垂；Debug 构建保留 `assert`，`JS_FreeRuntime` 的「堆已空」断言因此在测试里生效，任何 `JSValue` 泄漏都会在销毁引擎时暴露。Kotlin 层不持有 `JSValue`，所以 ASan 只需覆盖 C 层，不为它单独编 K/N 测试库。
+
+## 字节码与宿主工具
+
+编译器就是 shim 的 `kmpjs_compile`：宿主工具 `qjsc-kmp`（`native/tools`，`./gradlew :library:buildHostTools` 编出 `library/build/native/host-tools/bin/qjsc-kmp`）和 Kotlin 的 `JsBytecode.compile` 都只是它的包装。输出绑定 `native/UPSTREAM` 的 commit（CMake 读进 `KMPJS_UPSTREAM_COMMIT` 编译期常量），与字长无关，所有架构共用一份。不用上游的 `qjsc`：它输出的是 C 源码，且不会写我们的文件头。
+
+```sh
+qjsc-kmp -m -n @tiny-ui/core --strip-source -o core.bin src/core.js   # 模块：-n 是注册与 import 用的名字
+qjsc-kmp -o rules.bin src/rules.js                                     # 脚本
+```
+
+`hostToolsTest` 编一个模块、核对文件头并确认语法错误以退出码 1 报出，挂在 `check` 与 CI 里。更新 `native/UPSTREAM` 后所有字节码都要重编，加载会以「built for engine …」拒绝旧文件。
 
 ## 消费方本地联调
 

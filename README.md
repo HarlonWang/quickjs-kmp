@@ -135,7 +135,7 @@ try {
 
 - JDK 25 for the Gradle daemon (`gradle/gradle-daemon-jvm.properties`; Gradle downloads it when missing), Xcode, Android SDK with the NDK version pinned in `gradle/libs.versions.toml`, and `cmake` on `PATH`.
 - `./gradlew :library:macosArm64Test` is the fastest full check; `:library:testAndroidHostTest` runs the same suite through the real JNI bridge on the host; `:library:connectedAndroidDeviceTest` runs it on a device or emulator.
-- `./gradlew :library:nativeShimTest` runs the C-level shim tests under AddressSanitizer.
+- `./gradlew :library:nativeShimTest` runs the C-level shim tests under AddressSanitizer; `:library:buildHostTools` builds the `qjsc-kmp` command line compiler (`build/native/host-tools/bin`) for build pipelines.
 - CI (`.github/workflows/build.yml`) runs the shim tests, macOS tests, Android host tests, iOS compilation, Android AAR assembly and the API check on every PR and push to `main`; `publish.yml` releases to Maven Central when a version tag is pushed.
 
 ## Upstream

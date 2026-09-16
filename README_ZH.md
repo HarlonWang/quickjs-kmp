@@ -135,7 +135,7 @@ try {
 
 - Gradle daemon 用 JDK 25（`gradle/gradle-daemon-jvm.properties`，缺失时 Gradle 自动下载）、Xcode、装有 `gradle/libs.versions.toml` 里锁定的 NDK 版本的 Android SDK、PATH 上有 `cmake`。
 - `./gradlew :library:macosArm64Test` 是最快的完整检查；`:library:testAndroidHostTest` 在宿主上经真实 JNI 桥跑同一套用例；`:library:connectedAndroidDeviceTest` 在设备或模拟器上跑。
-- `./gradlew :library:nativeShimTest` 在 AddressSanitizer 下跑 C 层的 shim 测试。
+- `./gradlew :library:nativeShimTest` 在 AddressSanitizer 下跑 C 层的 shim 测试；`:library:buildHostTools` 编出命令行编译器 `qjsc-kmp`（`build/native/host-tools/bin`），供构建链使用。
 - CI（`.github/workflows/build.yml`）在每个 PR 与推到 `main` 时跑 shim 测试、macOS 测试、Android 宿主测试、iOS 编译、Android AAR 打包与 API 检查；`publish.yml` 在推版本 tag 时发布到 Maven Central。
 
 ## 上游
