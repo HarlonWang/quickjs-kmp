@@ -266,19 +266,23 @@ abstract class HostToolsTest @Inject constructor(private val execOps: ExecOperat
     @TaskAction
     fun run() {
         val dir = workDir.get().asFile.apply { mkdirs() }
-        val tool = binDir.get().file("qjsc-kmp").asFile.absolutePath
+        val exe = if (System.getProperty("os.name").startsWith("Windows")) "qjsc-kmp.exe" else "qjsc-kmp"
+        val tool = binDir.get().file(exe).asFile.absolutePath
         val script = dir.resolve("smoke.js").apply { writeText("export const answer = 6 * 7;\n") }
         val out = dir.resolve("smoke.bin")
         execOps.exec { commandLine(tool, "-m", "-n", "smoke", "--strip-source", "-o", out.absolutePath, script.absolutePath) }
         val bytes = out.readBytes()
         check(bytes.size > 52 && bytes.copyOfRange(0, 4).decodeToString() == "QJKB") { "qjsc-kmp produced ${bytes.size} bytes without the expected header" }
         val bad = dir.resolve("bad.js").apply { writeText("export const = ;\n") }
+        val stderr = ByteArrayOutputStream()
         val failure = execOps.exec {
             commandLine(tool, "-m", bad.absolutePath)
             isIgnoreExitValue = true
-            errorOutput = ByteArrayOutputStream()
+            errorOutput = stderr
         }
+        val diagnostics = stderr.toString()
         check(failure.exitValue == 1) { "qjsc-kmp exited ${failure.exitValue} on a syntax error" }
+        check("SyntaxError" in diagnostics && "bad.js" in diagnostics) { "qjsc-kmp did not report the syntax error with its location:\n$diagnostics" }
     }
 }
 

@@ -1,5 +1,6 @@
 /* Host command line compiler: the same kmpjs_compile that JsBytecode.compile wraps, for build pipelines. */
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include "quickjs_kmp.h"
@@ -48,6 +49,7 @@ int main(int argc, char **argv)
     long len;
     kmpjs_value result;
     FILE *f;
+    int wrote = 0;
 
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-m") == 0) {
@@ -80,6 +82,13 @@ int main(int argc, char **argv)
     code = read_file(input, &len);
     if (!code) {
         fprintf(stderr, "%s: cannot read %s\n", argv[0], input);
+        free(out_default);
+        return 1;
+    }
+    if (len > INT32_MAX) {
+        fprintf(stderr, "%s: %s is too large (%ld bytes)\n", argv[0], input, len);
+        free(code);
+        free(out_default);
         return 1;
     }
     if (kmpjs_compile(code, (int32_t)len, name, flags, &result) != 0) {
@@ -93,15 +102,15 @@ int main(int argc, char **argv)
         return 1;
     }
     f = fopen(output, "wb");
-    if (!f || fwrite(result.str, 1, (size_t)result.str_len, f) != (size_t)result.str_len || fclose(f)) {
-        fprintf(stderr, "%s: cannot write %s\n", argv[0], output);
-        kmpjs_free((void *)result.str);
-        free(code);
-        free(out_default);
-        return 1;
+    if (f) {
+        size_t written = fwrite(result.str, 1, (size_t)result.str_len, f);
+        int closed = fclose(f);
+        wrote = written == (size_t)result.str_len && closed == 0;
     }
+    if (!wrote)
+        fprintf(stderr, "%s: cannot write %s\n", argv[0], output);
     kmpjs_free((void *)result.str);
     free(code);
     free(out_default);
-    return 0;
+    return wrote ? 0 : 1;
 }
