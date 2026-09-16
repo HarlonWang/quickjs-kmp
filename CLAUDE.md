@@ -29,6 +29,7 @@ QuickJS 的 KMP 绑定 SDK，mquickjs-kmp（已归档）的后继，代码与决
 - Android host test（真实 JNI 路径，不需要模拟器）：`./gradlew :library:testAndroidHostTest`
 - shim 的 C 测试（ASan）：`./gradlew :library:nativeShimTest`，改 shim 必跑
 - 宿主工具：`./gradlew :library:buildHostTools` 编出 `qjsc-kmp`，`:library:hostToolsTest` 冒烟
+- TinyUI 验收基准（只在 macOS、release 测试二进制）：`TINYUI_BENCH_DIR=<tinyui>/bench ./gradlew :library:tinyUIBench`；debug 二进制的数字不作数
 - Android 设备测试（需模拟器在线）：`./gradlew :library:connectedAndroidDeviceTest`
 - iOS 只编译：`./gradlew :library:compileKotlinIosArm64 :library:compileKotlinIosSimulatorArm64`
 - 改 shim 时新增的行为要在 `native/test/shim_test.c` 里加 CHECK

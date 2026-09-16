@@ -362,6 +362,11 @@ kotlin {
         freeCompilerArgs.add("-Xexpect-actual-classes")
     }
 
+    // 基准类测试要跑优化过的二进制：默认的 test 二进制是 debug，Kotlin 侧慢数倍会把桥的开销算错
+    macosArm64 {
+        binaries.test("release", listOf(org.jetbrains.kotlin.gradle.plugin.mpp.NativeBuildType.RELEASE))
+    }
+
     targets.withType<KotlinNativeTarget>().configureEach {
         val nativeTask = appleNativeTasks.getValue(name)
         compilations.getByName("main").cinterops.create("quickjs") {
@@ -394,6 +399,17 @@ kotlin {
 
 tasks.withType<CMakeBuild>().configureEach {
     cmake.set(cmakeExecutable)
+}
+
+// TinyUI 验收基准：跑 release 测试二进制里的 TinyUIBenchTest，需要 TINYUI_BENCH_DIR 指向 TinyUI 的 bench/ 目录
+tasks.register<Exec>("tinyUIBench") {
+    group = "verification"
+    description = "Runs TinyUIBenchTest from the release test binary (set TINYUI_BENCH_DIR)"
+    val link = tasks.named("linkReleaseReleaseTestMacosArm64")
+    dependsOn(link)
+    executable = layout.buildDirectory.file("bin/macosArm64/releaseReleaseTest/release.kexe").get().asFile.absolutePath
+    args("--ktest_filter=wang.harlon.quickjs.TinyUIBenchTest.*")
+    providers.environmentVariable("TINYUI_BENCH_DIR").orNull?.let { environment("TINYUI_BENCH_DIR", it) }
 }
 
 tasks.withType<Test>().matching { it.name == "testAndroidHostTest" }.configureEach {
