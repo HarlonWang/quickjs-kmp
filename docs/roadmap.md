@@ -26,7 +26,7 @@
 - ~~脚本与模块字节码：`JsBytecode.compile`（script / module 两种模式、`strip` 三档）、文件头（magic + commit，无字长）、`JsEngine.runBytecode` / `registerModule(bytecode)`；跨架构用例（固定样本在 macOS arm64 编出，任何架构加载）~~ 已完成
 - ~~宿主工具 `qjsc-kmp`（`buildHostTools`）~~ 已完成
 - ASan 冒烟挂 check / CI；build.yml / publish.yml；BCV klib dump
-- 发 `wang.harlon:quickjs-kmp:0.1.0`
+- 发 `wang.harlon:quickjs-kmp:0.1.0`（secrets 已配，README 已备）
 - ~~验收：TinyUI `bench/signal.js` 经 `JsEngine` 跑通 S1～S4~~ 已完成，按桥的形状测（`TINYUI_BENCH_DIR=… ./gradlew :library:tinyUIBench`），结果见 TinyUI `bench/results/2026-09-16-quickjs-kmp.md`
 
 ## 之后
