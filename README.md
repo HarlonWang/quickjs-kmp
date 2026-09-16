@@ -2,12 +2,13 @@
 
 > Kotlin Multiplatform bindings for [QuickJS](https://github.com/bellard/quickjs), the ES2025 JavaScript engine by Fabrice Bellard. Android + iOS, with macOS as a debug host.
 
+[![Maven Central](https://img.shields.io/maven-central/v/wang.harlon/quickjs-kmp?color=blue&label=Maven%20Central)](https://central.sonatype.com/artifact/wang.harlon/quickjs-kmp)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS-brightgreen)](https://kotlinlang.org/docs/multiplatform.html)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 English | [中文](./README_ZH.md)
 
-> Not published yet. Successor of [mquickjs-kmp](https://github.com/HarlonWang/mquickjs-kmp) (archived); see [docs/roadmap.md](docs/roadmap.md) for what is done and what is next. Built for [TinyUI](https://github.com/HarlonWang/tinyui) but not tied to it.
+> Successor of [mquickjs-kmp](https://github.com/HarlonWang/mquickjs-kmp) (archived); see [docs/roadmap.md](docs/roadmap.md) for what is done and what is next. Built for [TinyUI](https://github.com/HarlonWang/tinyui) but not tied to it.
 
 ## Platforms
 
@@ -16,6 +17,14 @@ English | [中文](./README_ZH.md)
 | Android (`minSdk 24`) | JNI | `.so` bundled in the AAR (`arm64-v8a`, `armeabi-v7a`, `x86_64`) |
 | iOS (`iosArm64`, `iosSimulatorArm64`) | cinterop | static library bundled in the klib, no CocoaPods / SPM |
 | macOS (`macosArm64`) | cinterop | debug host for ASan, published as well |
+
+## Install
+
+```kotlin
+commonMain.dependencies {
+    implementation("wang.harlon:quickjs-kmp:latest.version")
+}
+```
 
 ## Usage
 

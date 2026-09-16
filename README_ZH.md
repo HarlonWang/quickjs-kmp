@@ -2,12 +2,13 @@
 
 > [QuickJS](https://github.com/bellard/quickjs) 的 Kotlin Multiplatform 绑定。QuickJS 是 Fabrice Bellard 的 ES2025 JavaScript 引擎。Android + iOS，macOS 作为调试宿主。
 
+[![Maven Central](https://img.shields.io/maven-central/v/wang.harlon/quickjs-kmp?color=blue&label=Maven%20Central)](https://central.sonatype.com/artifact/wang.harlon/quickjs-kmp)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS-brightgreen)](https://kotlinlang.org/docs/multiplatform.html)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 [English](./README.md) | 中文
 
-> 尚未发布。[mquickjs-kmp](https://github.com/HarlonWang/mquickjs-kmp)（已归档）的后继，已完成与后续计划见 [docs/roadmap.md](docs/roadmap.md)。为 [TinyUI](https://github.com/HarlonWang/tinyui) 而建，但不绑定它。
+> [mquickjs-kmp](https://github.com/HarlonWang/mquickjs-kmp)（已归档）的后继，已完成与后续计划见 [docs/roadmap.md](docs/roadmap.md)。为 [TinyUI](https://github.com/HarlonWang/tinyui) 而建，但不绑定它。
 
 ## 平台
 
@@ -16,6 +17,14 @@
 | Android（`minSdk 24`） | JNI | `.so` 内置于 AAR（`arm64-v8a`、`armeabi-v7a`、`x86_64`） |
 | iOS（`iosArm64`、`iosSimulatorArm64`） | cinterop | 静态库打进 klib，不需要 CocoaPods / SPM |
 | macOS（`macosArm64`） | cinterop | ASan 的调试宿主，同时随包发布 |
+
+## 安装
+
+```kotlin
+commonMain.dependencies {
+    implementation("wang.harlon:quickjs-kmp:latest.version")
+}
+```
 
 ## 用法
 
