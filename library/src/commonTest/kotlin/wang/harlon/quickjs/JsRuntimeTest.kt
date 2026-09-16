@@ -58,11 +58,14 @@ class JsRuntimeTest {
             }
             val bytecode = JsBytecode.compile(nested, "deep", module = true)
             val engine = withContext(creator) { JsEngine() }
-            withContext(worker) {
-                assertEquals("deep", engine.registerModule(bytecode))
-                engine.evaluateModule("import { deep } from 'deep'; export const v = deep();").use { assertEquals(JsValue.Num(1), it.get("v")) }
+            try {
+                withContext(worker) {
+                    assertEquals("deep", engine.registerModule(bytecode))
+                    engine.evaluateModule("import { deep } from 'deep'; export const v = deep();").use { assertEquals(JsValue.Num(1), it.get("v")) }
+                }
+            } finally {
+                withContext(creator) { engine.close() }
             }
-            withContext(creator) { engine.close() }
         } finally {
             creator.close()
             worker.close()
