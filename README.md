@@ -8,7 +8,7 @@
 
 English | [中文](./README_ZH.md)
 
-> Successor of [mquickjs-kmp](https://github.com/HarlonWang/mquickjs-kmp) (archived); see [docs/roadmap.md](docs/roadmap.md) for what is done and what is next. Built for [TinyUI](https://github.com/HarlonWang/tinyui) but not tied to it.
+> Successor of [mquickjs-kmp](https://github.com/HarlonWang/mquickjs-kmp) (archived); see [docs/roadmap.md](docs/roadmap.md) for what is done and what is next. Built for [TinyUI](https://github.com/tiny-ui/tinyui) but not tied to it.
 
 ## Platforms
 
