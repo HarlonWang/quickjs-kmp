@@ -1,0 +1,52 @@
+name: qjsc-kmp binaries
+
+# Builds the prebuilt qjsc-kmp of every npm platform package; build.yml and publish.yml call it
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: darwin-arm64
+            runner: macos-latest
+          - platform: darwin-x64
+            runner: macos-latest
+          - platform: linux-x64
+            runner: ubuntu-latest
+          - platform: linux-arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Build (macOS)
+        if: startsWith(matrix.platform, 'darwin-')
+        run: sh npm/build-qjsc.sh ${{ matrix.platform }} out/${{ matrix.platform }}
+
+      # Alpine's musl links fully static; building inside the container keeps the runner's glibc out of the binary
+      - name: Build (Linux, static musl)
+        if: startsWith(matrix.platform, 'linux-')
+        run: |
+          docker run --rm -v "$PWD":/src -w /src alpine:3.20 sh -c '
+            apk add --no-cache build-base cmake nodejs >/dev/null &&
+            sh npm/build-qjsc.sh ${{ matrix.platform }} out/${{ matrix.platform }} &&
+            node npm/smoke.mjs out/${{ matrix.platform }}/qjsc-kmp'
+          sudo chown -R "$(id -u):$(id -g)" out build
+
+      # on Linux this runs on the runner's glibc system, the case the static build exists for
+      - name: Smoke test
+        run: node npm/smoke.mjs out/${{ matrix.platform }}/qjsc-kmp
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qjsc-${{ matrix.platform }}
+          path: out/${{ matrix.platform }}/qjsc-kmp
+          if-no-files-found: error

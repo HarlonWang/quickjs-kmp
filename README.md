@@ -103,6 +103,12 @@ JsEngine().use { engine ->
 
 `Strip.SOURCE` drops the source text and keeps line numbers in stack traces; `Strip.DEBUG` drops all debug information.
 
+Build pipelines can compile without Gradle or a JDK: the npm package [`qjsc-kmp`](./npm/qjsc-kmp) ships the same compiler prebuilt for macOS (arm64, x64) and Linux (x64, arm64, statically linked). Use the version equal to this library's, so the bytecode names the engine the app runs.
+
+```sh
+npx qjsc-kmp@<version> -m -n pages/list --strip-source -o list.bin list.js
+```
+
 ### Holding JS objects: `JsRef`
 
 Ask for `ObjectTransport.REF` and objects come back as live handles instead of JSON. A `JsRef` reads and writes properties, indexes arrays, calls functions with a `this` and arguments, and must be closed: the object stays alive in the engine until then.
@@ -154,7 +160,7 @@ try {
 - JDK 25 for the Gradle daemon (`gradle/gradle-daemon-jvm.properties`; Gradle downloads it when missing), Xcode, Android SDK with the NDK version pinned in `gradle/libs.versions.toml`, and `cmake` on `PATH`.
 - `./gradlew :library:macosArm64Test` is the fastest full check; `:library:testAndroidHostTest` runs the same suite through the real JNI bridge on the host; `:library:connectedAndroidDeviceTest` runs it on a device or emulator.
 - `./gradlew :library:nativeShimTest` runs the C-level shim tests under AddressSanitizer; `:library:buildHostTools` builds the `qjsc-kmp` command line compiler (`build/native/host-tools/bin`) for build pipelines.
-- CI (`.github/workflows/build.yml`) runs the shim tests, macOS tests, Android host tests, iOS compilation, Android AAR assembly and the API check on every PR and push to `main`; `publish.yml` releases to Maven Central when a version tag is pushed.
+- CI (`.github/workflows/build.yml`) runs the shim tests, macOS tests, Android host tests, iOS compilation, Android AAR assembly and the API check on every PR and push to `main`; `publish.yml` releases to Maven Central when a version tag is pushed, and publishes the `qjsc-kmp` npm packages of the same version (built by `qjsc.yml`, which PRs run too).
 
 ## Upstream
 

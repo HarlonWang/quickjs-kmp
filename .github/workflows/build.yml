@@ -51,3 +51,5 @@ jobs:
             library/build/test-results/
           if-no-files-found: ignore
 
+  qjsc:
+    uses: ./.github/workflows/qjsc.yml

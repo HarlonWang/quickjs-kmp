@@ -103,6 +103,12 @@ JsEngine().use { engine ->
 
 `Strip.SOURCE` 去掉源码文本、栈里保留行号；`Strip.DEBUG` 去掉全部调试信息。
 
+构建链可以不经 Gradle、不装 JDK 编字节码：npm 包 [`qjsc-kmp`](./npm/qjsc-kmp) 是同一个编译器的预编译版，覆盖 macOS（arm64、x64）与 Linux（x64、arm64，静态链接）。版本要与本库一致，字节码里记的引擎才是 App 跑的那个。
+
+```sh
+npx qjsc-kmp@<version> -m -n pages/list --strip-source -o list.bin list.js
+```
+
 ### 持有 JS 对象：`JsRef`
 
 指定 `ObjectTransport.REF`，对象就以句柄而非 JSON 返回。`JsRef` 可以读写属性、按下标访问数组、带 `this` 与参数调用函数，用完必须 close：在此之前对象一直活在引擎里。
@@ -154,7 +160,7 @@ try {
 - Gradle daemon 用 JDK 25（`gradle/gradle-daemon-jvm.properties`，缺失时 Gradle 自动下载）、Xcode、装有 `gradle/libs.versions.toml` 里锁定的 NDK 版本的 Android SDK、PATH 上有 `cmake`。
 - `./gradlew :library:macosArm64Test` 是最快的完整检查；`:library:testAndroidHostTest` 在宿主上经真实 JNI 桥跑同一套用例；`:library:connectedAndroidDeviceTest` 在设备或模拟器上跑。
 - `./gradlew :library:nativeShimTest` 在 AddressSanitizer 下跑 C 层的 shim 测试；`:library:buildHostTools` 编出命令行编译器 `qjsc-kmp`（`build/native/host-tools/bin`），供构建链使用。
-- CI（`.github/workflows/build.yml`）在每个 PR 与推到 `main` 时跑 shim 测试、macOS 测试、Android 宿主测试、iOS 编译、Android AAR 打包与 API 检查；`publish.yml` 在推版本 tag 时发布到 Maven Central。
+- CI（`.github/workflows/build.yml`）在每个 PR 与推到 `main` 时跑 shim 测试、macOS 测试、Android 宿主测试、iOS 编译、Android AAR 打包与 API 检查；`publish.yml` 在推版本 tag 时发布到 Maven Central，并发布同版本的 `qjsc-kmp` npm 包（由 `qjsc.yml` 编出，PR 也会跑它）。
 
 ## 上游
 

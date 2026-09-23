@@ -1,0 +1,30 @@
+{
+  "name": "qjsc-kmp",
+  "version": "0.0.0",
+  "description": "Prebuilt qjsc-kmp: compiles JavaScript modules to quickjs-kmp bytecode.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    }
+  },
+  "bin": {
+    "qjsc-kmp": "bin/qjsc-kmp.js"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "bin",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HarlonWang/quickjs-kmp.git",
+    "directory": "npm/qjsc-kmp"
+  }
+}
