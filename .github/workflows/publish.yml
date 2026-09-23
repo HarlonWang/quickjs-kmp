@@ -46,3 +46,39 @@ jobs:
         run: gh release create "$GITHUB_REF_NAME" --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}
+
+  qjsc:
+    uses: ./.github/workflows/qjsc.yml
+
+  # qjsc-kmp to npm by trusted publishing (OIDC); each package's Trusted Publisher names this workflow file
+  npm:
+    needs: [publish, qjsc]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24   # bundles npm >= 11.5.1, required for OIDC
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: qjsc-*
+          path: binaries
+      - name: Lay out the packages
+        run: |
+          for d in binaries/qjsc-*; do mv "$d" "binaries/${d#binaries/qjsc-}"; done
+          node npm/assemble.mjs "$GITHUB_REF_NAME" binaries dist
+      # platform packages first: the entry package's optionalDependencies must resolve the moment it appears
+      - name: Publish
+        run: |
+          for dir in dist/darwin-arm64 dist/darwin-x64 dist/linux-arm64 dist/linux-x64 dist/qjsc-kmp; do
+            name=$(node -p "require('./$dir/package.json').name")
+            if npm view "$name@$GITHUB_REF_NAME" version >/dev/null 2>&1; then
+              echo "$name@$GITHUB_REF_NAME is already published"
+            else
+              npm publish "$dir" --access public
+            fi
+          done
