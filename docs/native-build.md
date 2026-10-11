@@ -40,6 +40,8 @@ git subtree pull --prefix native/quickjs https://github.com/bellard/quickjs.git 
 
 三端都由 `native/CMakeLists.txt` 统一描述，Gradle 的 `CMakeBuild` 任务按目标传不同的 CMake 参数。AGP 9 的 KMP 库插件没有 `externalNativeBuild` DSL，Android 的 `.so` 由 `collectJniLibs` 汇总后经变体 API `sources.jniLibs.addGeneratedSourceDirectory` 注入 AAR。Apple 侧 cinterop 的 `.def` 用 `staticLibraries` 把 `.a` 打进 klib，`-libraryPath` 按目标传入。
 
+Android 的 `.so` 按 16 KB 页面对齐链接（`-Wl,-z,max-page-size=16384`，原因见 decisions.md「三端构建」条），CI 在 `assembleAndroidMain` 之后用 NDK 的 `llvm-readelf` 检查每个 ABI 的 LOAD 段对齐，低于 16 KB 即失败。
+
 NDK 版本固定在 version catalog 的 `android-ndk`，不用 AGP 默认值，避免 CI 与本机各自下载不同版本。`cmake` 取 PATH 上的（brew 或 Android SDK 自带的均可）。
 
 Android host test 走宿主编译的 JNI 库：`buildNativeHostJni` 以 `-DQJS_HOST_JNI=ON` 在本机编出 `libquickjs_kmp.dylib`（Linux 为 `.so`），`testAndroidHostTest` 通过 `java.library.path` 加载。JDK 头文件按 `JAVA_HOME` → daemon 的 `java.home` → `/Library/Java/JavaVirtualMachines/*` 顺序找第一个带 `include/jni.h` 的（Android Studio 的 JBR 没有头文件）。设备测试仍走 `connectedAndroidDeviceTest`。

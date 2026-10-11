@@ -42,6 +42,24 @@ jobs:
           :library:assembleAndroidMain
           :library:apiCheck
 
+      # 16 KB 页面设备与 Google Play 的要求；链接参数见 native/CMakeLists.txt
+      - name: Check Android 16 KB page alignment
+        run: |
+          READELF=$(ls "$ANDROID_HOME"/ndk/*/toolchains/llvm/prebuilt/*/bin/llvm-readelf | head -n 1)
+          shopt -s nullglob
+          libs=(library/build/native/android/*/lib/*.so)
+          [ ${#libs[@]} -eq 3 ] || { echo "expected 3 Android .so, found ${#libs[@]}"; exit 1; }
+          status=0
+          for so in "${libs[@]}"; do
+            align=$("$READELF" -lW "$so" | awk '$1 == "LOAD" { print $NF }' | sort -u)
+            echo "$so: $align"
+            [ -n "$align" ] || status=1
+            for a in $align; do
+              [ $((a)) -ge 16384 ] || status=1
+            done
+          done
+          exit $status
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
