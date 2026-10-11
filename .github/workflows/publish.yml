@@ -79,6 +79,6 @@ jobs:
             if npm view "$name@$GITHUB_REF_NAME" version >/dev/null 2>&1; then
               echo "$name@$GITHUB_REF_NAME is already published"
             else
-              npm publish "$dir" --access public
+              npm publish "./$dir" --access public   # without ./ npm reads dist/<x> as a GitHub owner/repo shorthand
             fi
           done
