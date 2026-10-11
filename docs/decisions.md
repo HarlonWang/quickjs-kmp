@@ -70,4 +70,4 @@ ES2025 下 JSON 过桥的损失面比 ES5 大得多，这是默认 `ObjectTransp
 
 ## 三端构建：沿用 mquickjs-kmp 的 Gradle 驱动 CMake
 
-`-Os -fvisibility=hidden` + strip，`-D_GNU_SOURCE`；Android arm64-v8a / armeabi-v7a / x86_64，iOS device + simulator arm64，macosArm64 作为调试宿主并随包发布；ASan 冒烟沿用 `native/test/shim_test.c` 的做法。预期每架构约 1.2 MB。
+`-Os -fvisibility=hidden` + strip，`-D_GNU_SOURCE`；Android arm64-v8a / armeabi-v7a / x86_64，iOS device + simulator arm64，macosArm64 作为调试宿主并随包发布；ASan 冒烟沿用 `native/test/shim_test.c` 的做法。预期每架构约 1.2 MB。Android 的 `.so` 链接时固定 `-Wl,-z,max-page-size=16384`：NDK r27 默认仍是 4 KB 的 LOAD 段对齐，在 16 KB 页面设备上 App 只能以兼容模式运行并弹系统提示，Google Play 也要求 16 KB 对齐；显式写在链接参数里，不依赖 NDK 版本的默认值，CI 用 `llvm-readelf` 逐个检查。
