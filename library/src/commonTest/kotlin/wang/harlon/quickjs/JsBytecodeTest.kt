@@ -81,12 +81,16 @@ class JsBytecodeTest {
     }
 
     // 固定样本：在 macOS arm64 上编译（strip = SOURCE），含 BigInt 与浮点，验证字节码与字长无关；
-    // 上游 commit 变更时会以「built for engine …」失败，此时用 native/test 里的 kmpjs_compile 重新生成
+    // 上游 commit 变更时会以「built for engine …」失败，此时用 qjsc-kmp 按下面的源码重新生成：
+    // `qjsc-kmp -m -n fixture --strip-source -o fixture.bin fixture.mjs && base64 -i fixture.bin`
+    //   export const text = 'fixture';
+    //   export const big = 2n ** 64n + 1n;
+    //   export default [1, 2.5, -3, 'x'].map(x => x).join(',');
     @OptIn(ExperimentalEncodingApi::class)
     @Test
     fun bytecodeCompiledOnAnotherArchitectureLoads() = JsEngine().use { engine ->
         val fixture = Base64.decode(
-            "UUpLQjQAAAABAAAAMDRiZTI0NjAwMTU5OWY1OTk1ZmEyZjJkOGM5MWEwZjE5OGQzZjM0YwUGDmZpeHR1cmUGYmlnCHRleHQCeAZtYXACLA3mAwADAADoAwAB6gMAAiwAAAAMIAYBqAEAAAAEAAQBRADoAwAeAOoDAR4AggICFgDSAgAFAAjoAimwAgAAALBAAAAAnbABAAAAm98E8wAAAOC0vQC7/QT2AAAAJgQAPvcAAAA4AwAkAQA+XwAAAAT4AAAAJAEA4QYv5gMWAABILCAOBxcgSBZKNBAbChEBERA0CgAGAAAAAAAABEA=",
+            "UUpLQjQAAAABAAAAMjUxOTc3NDQwMzBhOTY1OWI1YTZlNmY4NjFhZTc4OTgxYjVmY2UwNwUGDmZpeHR1cmUIdGV4dAZiaWcCeAZtYXACLA34AwADAAD6AwAB/AMAAiwAAAAMIAYBrgEAAAAEAAMCQwD6AwAeAPwDAR4AhgICFgAI7gIpBPwAAADlsAIAAACwQAAAAJ2wAQAAAJvmusMAwf0E/wAAACYEAD4AAQAAxAEkAQA+YgAAAAQBAQAAJAEA5wYv+AMUAAAvJDoIIA4HFxcONBAlCBEQNAoABgAAAAAAAARADAIGAQABAAEBAAAAAgH+AwEAANUo+AMEAiUCCgA=",
         )
         assertEquals("fixture", engine.registerModule(fixture))
         engine.evaluateModule("import big, { text } from 'fixture'; import * as ns from 'fixture'; export const all = text + '|' + ns.big + '|' + ns.default;").use { ns ->

@@ -119,6 +119,20 @@ function test_function()
     g = constructor1.bind(null, 1);
     r = new g();
     assert(r.x, 1);
+
+    // a callable proxy stays callable after revoke, so toString works
+    var native = "function () {\n    [native code]\n}";
+    g = Proxy.revocable(function f() {}, {});
+    g.revoke();
+    assert(Function.prototype.toString.call(g.proxy), native);
+    // and it does not read "name" through the proxy
+    var keys = [];
+    g = new Proxy(function f() {}, {
+        get(t, k) { keys.push(k); return Reflect.get(t, k); }
+    });
+    assert(Function.prototype.toString.call(g), native);
+    assert(keys.length, 0);
+    assert_throws(TypeError, () => Function.prototype.toString.call(new Proxy({}, {})));
 }
 
 function test()
@@ -230,6 +244,55 @@ function test_array()
         err = true;
     }
     assert(err && a.toString() === "1,2,3,4");
+
+    /* sort writes back every element, even those already in place */
+    assert_throws(TypeError, () => Array.prototype.sort.call("aa"));
+    assert_throws(TypeError, () => Object.freeze([1, 2]).sort());
+
+    /* array length modification with possible compaction */
+    a = [0, 1, 2, 3, 4, 5, 6, 7];
+    a[10] = 1;
+    a.length = 0;
+    a[10] = 2;
+    assert(a.length, 11);
+    assert(a.toString(), ",,,,,,,,,,2");
+
+    test_array_extension();
+    test_array_iterator();
+}
+
+function test_array_extension()
+{
+    "use strict";
+    var a, c, s, o;
+    /* array prevent extension */
+    var b = [1, , 3];                    // a hole: not a fast array
+    Object.preventExtensions(b);
+    assert_throws(TypeError, () => b[3] = 9);
+    assert(b.length, 3);
+    
+    var c = [1, , 3]; Object.preventExtensions(c);
+    assert_throws(TypeError, () => c.push(9));
+    assert(c.length, 3);
+    
+    var s = [1, , 3]; Object.seal(s);
+    assert_throws(TypeError, () => s[5] = 1);
+    assert(s.length, 3);
+    
+    var o = [1, , 3]; Object.preventExtensions(o);
+    assert(Reflect.defineProperty(o, 7, { value: 1 }), false);
+    assert(o.length, 3);
+}
+
+function test_array_iterator()
+{
+    var n = 0;
+    for (var x of Array.prototype.values.call({ length: -1, 0: "a" })) { if (++n > 3) break; }
+    assert(n, 0);
+
+    n = 0;
+    for (var k of Array.prototype.keys.call({ length: 2 ** 32 + 1 })) { if (++n > 5) break; }
+    assert(n, 6);
 }
 
 function test_string()
@@ -358,6 +421,7 @@ function test_math()
     assert(Math.hypot(3, 4), 5);
     assert(Math.abs(Math.hypot(3, 4, 5) - 7.0710678118654755) <= 1e-15);
     assert(Math.sumPrecise([1,Number.EPSILON/2,Number.MIN_VALUE]), 1.0000000000000002);
+    assert(Math.sumPrecise(new Array(300).fill(Math.pow(2,53)-1)), 2702159776422297000);
 }
 
 function test_number()
@@ -805,6 +869,9 @@ function test_regexp()
     a = a.exec("\u{10000}_\u{10000}");
     assert(a.indices[0][0], 0);
     assert(a.indices[0][1], 2);
+
+    /* syntax check */
+    assert(/-&&/v.test("-&&"), true);
 }
 
 function test_symbol()
