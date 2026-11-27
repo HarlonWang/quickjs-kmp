@@ -10,7 +10,7 @@ TinyUI（ADR-005）需要 ES2025 + 原生 ESM + 微任务 + 可预编译的引�
 
 与 mquickjs-kmp 平行；`kmp` 同样表示「QuickJS 的 Kotlin 移植」。仓库 `HarlonWang/quickjs-kmp`。不叫 `quickjs-wrapper-kmp`：quickjs-wrapper 是 Android 专用、JNI 直传 JSValue 的另一套设计，两者不是移植关系。
 
-## 上游：bellard/quickjs 本尊，git subtree 锁 commit `04be246`（版本 2026-06-04）
+## 上游：bellard/quickjs 本尊，git subtree 锁 commit `2519774`（2026-11-23，上游 VERSION 仍为 2026-06-04）
 
 不选 quickjs-ng：TinyUI 只需 ES2025 与本文列出的 API，本尊全有；作者 2024 年起稳定发版；单一上游可追溯。ng 的 API 正在缓慢分化，不评估切换：本仓不追 ng 独有特性，只跟本尊。上游目录 `native/quickjs/`（bellard 仓无 tag，锁 commit 记在 `native/UPSTREAM`，同 mquickjs-kmp）。
 
